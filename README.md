@@ -96,6 +96,9 @@ When you run codex-auth-docker-run, Codex may print the sign-in URL with line br
 - Paste it into a text editor and remove line breaks/spaces so it’s a single continuous URL.
 - Paste the cleaned URL into your browser to complete the login.
 
+### Known quirk with gemini cli
+On first login, gemini cli may become unresponsive. Kill it and launch again. should work.
+
 ### Tips
 - Rebuild the image after changing Dockerfile: codex-docker-build
 - Temporarily remove functions from your current shell: codex-deactivate
