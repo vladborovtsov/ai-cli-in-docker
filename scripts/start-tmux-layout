@@ -59,9 +59,11 @@ TMUX_WINDOW_STATUS_CURRENT_FORMAT="${TMUX_WINDOW_STATUS_CURRENT_FORMAT:-#I: #W#{
 
 # Create the session if it does not exist
 if ! tmux has-session -t "${TMUX_SESSION}" 2>/dev/null; then
-  # First tab: codex (kept alive with exec bash -l)
-  tmux new-session -d -s "${TMUX_SESSION}" -n codex \
-    "/bin/bash" -lc "codex || true; exec bash -l" || {
+  # First tab: main AI CLI (kept alive with exec bash -l)
+  AI_NAME="${AI_NAME:-codex}"
+  AI_COMMAND="${AI_COMMAND:-codex}"
+  tmux new-session -d -s "${TMUX_SESSION}" -n "${AI_NAME}" \
+    "/bin/bash" -lc "${AI_COMMAND} || true; exec bash -l" || {
       echo "[start-tmux-layout] Failed to create tmux session: ${TMUX_SESSION}" >&2
       exec /bin/bash -l
     }
@@ -116,8 +118,9 @@ fi
 (tmux set-option -t "${TMUX_SESSION}" -q window-status-current-fg "colour120" >/dev/null 2>&1 || true)
 (tmux set-option -t "${TMUX_SESSION}" -q window-status-current-attr "bold" >/dev/null 2>&1 || true)
 
-# Ensure Codex window is selected on attach
-(tmux select-window -t "${TMUX_SESSION}:codex" >/dev/null 2>&1 || true)
+# Ensure main AI CLI window is selected on attach
+AI_NAME="${AI_NAME:-codex}"
+(tmux select-window -t "${TMUX_SESSION}:${AI_NAME}" >/dev/null 2>&1 || true)
 # Try to attach; on failure, show diagnostics and fall back to a shell
 if ! exec tmux attach -t "${TMUX_SESSION}"; then
   echo "[start-tmux-layout] tmux attach failed. Diagnostics:" >&2

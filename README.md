@@ -1,14 +1,17 @@
-## OpenAI Codex in Docker
+## AI CLI in Docker
 
-Run the OpenAI Codex CLI inside Docker to keep your host clean while persisting CLI auth/config on your machine. Targets the OpenAI Codex project: https://github.com/openai/codex.
+Run AI CLI tools (OpenAI Codex, Google Gemini) inside Docker to keep your host clean while persisting CLI auth/config on your machine.
 
 ### Contents
-- Dockerfile based on ghcr.io/openai/codex-universal with @openai/codex preinstalled.
-- activate.sh adds helper shell functions:
-  - codex-docker-build — build the image.
-  - codex-docker-shell — open an interactive shell in the container with your current project mounted.
-  - codex-auth-docker-run — run Codex auth flow inside the container.
-  - codex-deactivate — remove the helper functions from the current shell.
+- `Dockerfile.codex`: Based on ghcr.io/openai/codex-universal with @openai/codex preinstalled.
+- `Dockerfile.gemini`: Based on node:20 with @google/gemini-cli preinstalled.
+- `activate.sh` adds helper shell functions:
+  - `codex-docker-build` — build the Codex image.
+  - `codex-docker-shell` — open an interactive shell in the Codex container.
+  - `gemini-docker-build` — build the Gemini image.
+  - `gemini-docker-shell` — open an interactive shell in the Gemini container.
+  - `codex-auth-docker-run` — run Codex auth flow inside the container.
+  - `codex-deactivate` — remove the helper functions from the current shell.
 
 ### Prerequisites
 - Docker installed and running.
@@ -17,23 +20,25 @@ Run the OpenAI Codex CLI inside Docker to keep your host clean while persisting 
 ### Quick Start
 1) Clone this repo and enter the directory.
 
-2) Build the image:
-   - source ./activate.sh
-   - codex-docker-build
+2) Build the images:
+   - `source ./activate.sh`
+   - `codex-docker-build` (for Codex)
+   - `gemini-docker-build` (for Gemini)
 
 3) Authenticate Codex CLI inside Docker (one-time):
-   - codex-auth-docker-run
+   - `codex-auth-docker-run`
    - This uses host networking and persists Codex CLI config under:
-     - Host: ~/.codex-docker-config
-     - Container: /root/.codex (mounted)
+     - Host: `~/.codex-docker-config`
+     - Container: `/root/.codex` (mounted)
 
 4) Start a shell with your current project mounted:
-   - codex-docker-shell
+   - `codex-docker-shell` (for Codex)
+   - `gemini-docker-shell` (for Gemini)
 
 What you get when the container starts:
 - A tmux session named after your current folder (overridable with TMUX_SESSION).
 - Windows:
-  1) Codex (active by default) — runs `codex`, then keeps the shell open.
+  1) AI CLI (active by default) — runs `codex` or `gemini`, then keeps the shell open.
   2) Shell
   3) Shell
   4) htop
