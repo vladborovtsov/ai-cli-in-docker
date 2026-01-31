@@ -5,11 +5,14 @@ Run AI CLI tools (OpenAI Codex, Google Gemini) inside Docker to keep your host c
 ### Contents
 - `Dockerfile.codex`: Based on ghcr.io/openai/codex-universal with @openai/codex preinstalled.
 - `Dockerfile.gemini`: Based on node:20 with @google/gemini-cli preinstalled.
+- `Dockerfile.claude`: Based on ubuntu:24.04 with @anthropic-ai/claude-code preinstalled.
 - `activate.sh` adds helper shell functions:
   - `codex-docker-build` — build the Codex image.
   - `codex-docker-shell` — open an interactive shell in the Codex container.
   - `gemini-docker-build` — build the Gemini image.
   - `gemini-docker-shell` — open an interactive shell in the Gemini container.
+  - `claude-docker-build` — build the Claude image.
+  - `claude-docker-shell` — open an interactive shell in the Claude container.
   - `codex-auth-docker-run` — run Codex auth flow inside the container.
   - `codex-deactivate` — remove the helper functions from the current shell.
 
@@ -24,6 +27,7 @@ Run AI CLI tools (OpenAI Codex, Google Gemini) inside Docker to keep your host c
    - `source ./activate.sh`
    - `codex-docker-build` (for Codex)
    - `gemini-docker-build` (for Gemini)
+   - `claude-docker-build` (for Claude)
 
 3) Authenticate Codex CLI inside Docker (one-time):
    - `codex-auth-docker-run`
@@ -34,11 +38,12 @@ Run AI CLI tools (OpenAI Codex, Google Gemini) inside Docker to keep your host c
 4) Start a shell with your current project mounted:
    - `codex-docker-shell` (for Codex)
    - `gemini-docker-shell` (for Gemini)
+   - `claude-docker-shell` (for Claude)
 
 What you get when the container starts:
 - A tmux session named after your current folder (overridable with TMUX_SESSION).
 - Windows:
-  1) AI CLI (active by default) — runs `codex` or `gemini`, then keeps the shell open.
+  1) AI CLI (active by default) — runs `codex`, `gemini` or `claude`, then keeps the shell open.
   2) Shell
   3) Shell
   4) htop
@@ -85,10 +90,18 @@ After editing your rc file, reload it or open a new terminal:
 - For Bash: source ~/.bashrc
 - For Zsh: source ~/.zshrc
 
-### Where Codex stores auth/config
-- On your host: ~/.codex-docker-config
-- In the container (mounted): /root/.codex
-- You can back up or remove ~/.codex-docker-config to reset auth.
+### Where AI tools store auth/config
+- **Codex**:
+  - Host: `~/.codex-docker-config`
+  - Container: `/root/.codex`
+- **Gemini**:
+  - Host: `~/.gemini-cli-docker-config`
+  - Container: `/root/.gemini`
+- **Claude**:
+  - Host: `~/.claude-docker-config`
+  - Container: `/root/.claude`
+
+You can back up or remove these directories on your host to reset auth.
 
 ### Known quirk with codex auth link
 When you run codex-auth-docker-run, Codex may print the sign-in URL with line breaks due to TTY wrapping in Docker. If your terminal doesn’t let you open the link directly:
