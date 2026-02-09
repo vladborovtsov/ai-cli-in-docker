@@ -9,7 +9,7 @@ RUN . /root/.nvm/nvm.sh && npm install -g @openai/codex
 
 # Install supplementary tools
 RUN apt-get update && \
-    apt-get install -y vim nano mc htop bat screen tmux jq && \
+    apt-get install -y vim nano mc htop bat screen tmux jq tree ncdu curl && \
     rm -rf /var/lib/apt/lists/*
 
 # Set the default working directory
