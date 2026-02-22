@@ -6,6 +6,7 @@ Run AI CLI tools (OpenAI Codex, Google Gemini) inside Docker to keep your host c
 - `Dockerfile.codex`: Based on ghcr.io/openai/codex-universal with @openai/codex preinstalled.
 - `Dockerfile.gemini`: Based on node:20 with @google/gemini-cli preinstalled.
 - `Dockerfile.claude`: Based on ubuntu:24.04 with @anthropic-ai/claude-code preinstalled.
+- `Dockerfile.opencode`: Based on node:20 with opencode preinstalled.
 - `activate.sh` adds helper shell functions:
   - `codex-docker-build` — build the Codex image.
   - `codex-docker-shell` — open an interactive shell in the Codex container.
@@ -13,6 +14,9 @@ Run AI CLI tools (OpenAI Codex, Google Gemini) inside Docker to keep your host c
   - `gemini-docker-shell` — open an interactive shell in the Gemini container.
   - `claude-docker-build` — build the Claude image.
   - `claude-docker-shell` — open an interactive shell in the Claude container.
+  - `opencode-docker-build` — build the OpenCode image.
+  - `opencode-docker-shell` — open an interactive shell in the OpenCode container.
+  - `docker-ai-build-all` — build all AI images without using cache.
   - `codex-auth-docker-run` — run Codex auth flow inside the container.
   - `codex-deactivate` — remove the helper functions from the current shell.
 
@@ -28,6 +32,8 @@ Run AI CLI tools (OpenAI Codex, Google Gemini) inside Docker to keep your host c
    - `codex-docker-build` (for Codex)
    - `gemini-docker-build` (for Gemini)
    - `claude-docker-build` (for Claude)
+   - `opencode-docker-build` (for OpenCode)
+   - `docker-ai-build-all` (build all images without cache)
 
 3) Authenticate Codex CLI inside Docker (one-time):
    - `codex-auth-docker-run`
@@ -39,6 +45,7 @@ Run AI CLI tools (OpenAI Codex, Google Gemini) inside Docker to keep your host c
    - `codex-docker-shell` (for Codex)
    - `gemini-docker-shell` (for Gemini)
    - `claude-docker-shell` (for Claude)
+   - `opencode-docker-shell` (for OpenCode)
 
 What you get when the container starts:
 - A tmux session named after your current folder (overridable with TMUX_SESSION).
@@ -100,6 +107,9 @@ After editing your rc file, reload it or open a new terminal:
 - **Claude**:
   - Host: `~/.claude-docker-config`
   - Container: `/root/.claude`
+- **OpenCode**:
+  - Host: `~/.opencode-docker-config`
+  - Container: `/root/.local`
 
 You can back up or remove these directories on your host to reset auth.
 
