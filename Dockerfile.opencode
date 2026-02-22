@@ -1,0 +1,33 @@
+FROM ubuntu:24.04
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN install -d -m 0755 /usr/local/bin
+COPY scripts/apt-install /usr/local/bin/apt-install
+COPY scripts/apt-packages-common /usr/local/share/apt-packages-common
+RUN chmod +x /usr/local/bin/apt-install
+
+# Install build tools and supplementary utilities
+RUN apt-install --no-install-recommends $(cat /usr/local/share/apt-packages-common) \
+    build-essential \
+    ca-certificates \
+    gnupg
+
+# Install Node.js (LTS) and OpenCode CLI
+RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - && \
+    apt-install --no-install-recommends nodejs && \
+    npm install -g opencode-ai@latest && \
+    npm cache clean --force && \
+    rm -rf /var/lib/apt/lists/*
+
+ENV PATH="/usr/local/bin:${PATH}"
+
+# Set the default working directory
+WORKDIR /workspace
+
+# Ensure /usr/local/bin exists
+# Add the tmux layout script into the image
+ADD scripts/start-tmux-layout /usr/local/bin/start-tmux-layout
+RUN chmod +x /usr/local/bin/start-tmux-layout
+
+# Make it the default when no args are provided (uses base entrypoint: bash --login "$@")
+CMD ["-lc","start-tmux-layout"]
