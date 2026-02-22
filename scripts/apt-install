@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+no_recommends=""
+if [ "${1-}" = "--no-install-recommends" ]; then
+  no_recommends="--no-install-recommends"
+  shift
+fi
+
+if [ "$#" -eq 0 ]; then
+  echo "Usage: apt-install [--no-install-recommends] <packages...>" >&2
+  exit 2
+fi
+
+apt-get update
+apt-get install -y ${no_recommends} "$@"
+rm -rf /var/lib/apt/lists/*

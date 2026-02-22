@@ -4,19 +4,21 @@ FROM ghcr.io/openai/codex-universal:latest
 # Switch to the root user to install global packages
 USER root
 
+RUN install -d -m 0755 /usr/local/bin
+COPY scripts/apt-install /usr/local/bin/apt-install
+COPY scripts/apt-packages-common /usr/local/share/apt-packages-common
+RUN chmod +x /usr/local/bin/apt-install
+
 # Install the Codex CLI tool globally by first sourcing the nvm script
 RUN . /root/.nvm/nvm.sh && npm install -g @openai/codex
 
 # Install supplementary tools
-RUN apt-get update && \
-    apt-get install -y vim nano mc htop bat screen tmux jq tree ncdu curl && \
-    rm -rf /var/lib/apt/lists/*
+RUN apt-install $(cat /usr/local/share/apt-packages-common)
 
 # Set the default working directory
 WORKDIR /workspace
 
 # Ensure /usr/local/bin exists
-RUN install -d -m 0755 /usr/local/bin
 # Add the tmux layout script into the image
 ADD scripts/start-tmux-layout /usr/local/bin/start-tmux-layout
 RUN chmod +x /usr/local/bin/start-tmux-layout

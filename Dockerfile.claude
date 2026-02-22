@@ -1,23 +1,14 @@
 FROM ubuntu:24.04
 ENV DEBIAN_FRONTEND=noninteractive
 
+RUN install -d -m 0755 /usr/local/bin
+COPY scripts/apt-install /usr/local/bin/apt-install
+COPY scripts/apt-packages-common /usr/local/share/apt-packages-common
+RUN chmod +x /usr/local/bin/apt-install
+
 # Install curl and supplementary tools
-RUN apt-get update && \
-    apt-get install -y \
-    curl \
-    ca-certificates \
-    vim \
-    nano \
-    mc \
-    htop \
-    bat \
-    screen \
-    tmux \
-    tree \
-    ncdu \
-    curl \
-    jq && \
-    rm -rf /var/lib/apt/lists/*
+RUN apt-install $(cat /usr/local/share/apt-packages-common) \
+    ca-certificates
 
 # Install Claude Code using the provided command
 RUN curl -fsSL https://claude.ai/install.sh | bash
@@ -29,7 +20,6 @@ ENV PATH="/root/.local/bin:${PATH}"
 WORKDIR /workspace
 
 # Ensure /usr/local/bin exists and add the tmux layout script
-RUN install -d -m 0755 /usr/local/bin
 ADD scripts/start-tmux-layout /usr/local/bin/start-tmux-layout
 RUN chmod +x /usr/local/bin/start-tmux-layout
 
