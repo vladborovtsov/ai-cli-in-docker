@@ -9,3 +9,5 @@ tmux
 jq
 tree
 ncdu
+dnsutils
+ffmpeg
