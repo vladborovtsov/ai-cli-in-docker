@@ -12,3 +12,8 @@ ncdu
 dnsutils
 ffmpeg
 file
+xxd
+unzip
+p7zip
+zip
+wget
