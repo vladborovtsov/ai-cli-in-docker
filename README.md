@@ -18,7 +18,7 @@ Run AI CLI tools (OpenAI Codex, Google Gemini) inside Docker to keep your host c
   - `opencode-docker-shell` — open an interactive shell in the OpenCode container.
   - `docker-ai-build-all` — build all AI images without using cache.
   - `codex-auth-docker-run` — run Codex auth flow inside the container.
-  - `codex-deactivate` — remove the helper functions from the current shell.
+  - `ai-docker-deactivate` — remove the helper functions from the current shell.
 
 ### Prerequisites
 - Docker installed and running.
@@ -73,8 +73,8 @@ More tmux docs:
 
 ### Make more room for the session name in the tmux status bar
 By default, tmux truncates the left status (where the session name appears) to ~10 characters. This setup increases it to 32 automatically. Customize it if needed:
-- One-off run: TMUX_STATUS_LEFT_LENGTH=50 codex-docker-shell
-- Persist for your shell session: export TMUX_STATUS_LEFT_LENGTH=50 before running codex-docker-shell
+- One-off run: `TMUX_STATUS_LEFT_LENGTH=50 gemini-docker-shell`
+- Persist for your shell session: `export TMUX_STATUS_LEFT_LENGTH=50` before running any `*-docker-shell` function.
 
 ### Persist activation in your shell (bashrc/zshrc)
 To have the helper functions available in every new shell, add a line to your shell init file that sources activate.sh from this repo. Replace /absolute/path/to/OpenAICodexInDocker with your actual path.
@@ -122,9 +122,13 @@ When you run codex-auth-docker-run, Codex may print the sign-in URL with line br
 ### Known quirk with gemini cli
 On first login, gemini cli may become unresponsive. Kill it and launch again. should work.
 
+## Tips & Tricks
+
+For common questions, troubleshooting, and useful tips, please refer to the [Tips & Tricks](TIPS.md) document.
+
 ### Tips
-- Rebuild the image after changing Dockerfile: codex-docker-build
-- Temporarily remove functions from your current shell: codex-deactivate
+- Rebuild an image after changing its Dockerfile: `codex-docker-build`, `gemini-docker-build`, etc.
+- Temporarily remove all helper functions from your current shell: `ai-docker-deactivate`
 
 ### Notes
 - --network=host is used for the auth flow to simplify opening the local browser and callbacks.
