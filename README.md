@@ -3,6 +3,7 @@
 Run AI CLI tools (OpenAI Codex, Google Gemini) inside Docker to keep your host clean while persisting CLI auth/config on your machine.
 
 ### Contents
+- [Why AI CLI in Docker?](WHY.md) — Rationale behind this project.
 - `Dockerfile.codex`: Based on ghcr.io/openai/codex-universal with @openai/codex preinstalled.
 - `Dockerfile.gemini`: Based on node:20 with @google/gemini-cli preinstalled.
 - `Dockerfile.claude`: Based on ubuntu:24.04 with @anthropic-ai/claude-code preinstalled.
