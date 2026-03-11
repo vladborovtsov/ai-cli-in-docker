@@ -124,9 +124,15 @@ On first login, gemini cli may become unresponsive. Kill it and launch again. sh
 
 ## Tips & Tricks
 
-For common questions, troubleshooting, and useful tips, please refer to the [Tips & Tricks](SUPPORT.md) document.
+### How do I insert line breaks in messages?
+To send multi-line messages, use `CTRL+J` to insert a line break. 
 
-### Tips
+This has been verified to work in:
+- `gemini cli`
+- `codex cli`
+- `opencode`
+
+### Additional Tips
 - Rebuild an image after changing its Dockerfile: `codex-docker-build`, `gemini-docker-build`, etc.
 - Temporarily remove all helper functions from your current shell: `ai-docker-deactivate`
 
