@@ -124,7 +124,7 @@ On first login, gemini cli may become unresponsive. Kill it and launch again. sh
 
 ## Tips & Tricks
 
-For common questions, troubleshooting, and useful tips, please refer to the [Tips & Tricks](TIPS.md) document.
+For common questions, troubleshooting, and useful tips, please refer to the [Tips & Tricks](SUPPORT.md) document.
 
 ### Tips
 - Rebuild an image after changing its Dockerfile: `codex-docker-build`, `gemini-docker-build`, etc.
