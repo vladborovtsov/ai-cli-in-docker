@@ -107,7 +107,7 @@ After editing your rc file, reload it or open a new terminal:
   - Container: `/root/.gemini`
 - **Claude**:
   - Host: `~/.claude-docker-config`
-  - Container: `/root/.claude`
+  - Container: `/root/.claude` (with `/root/.claude.json` symlinked to `/root/.claude/claude.json`)
 - **OpenCode**:
   - Host: `~/.opencode-docker-config`
   - Container: `/root/.local`

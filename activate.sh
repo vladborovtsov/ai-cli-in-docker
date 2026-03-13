@@ -29,6 +29,9 @@ for dir in \
 do
   mkdir -p "$dir"
   touch "$dir/docker-env.env"
+  if [ "$dir" = "$CLAUDE_CONFIG_PATH" ]; then
+    touch "$dir/claude.json"
+  fi
 done
 
 
@@ -299,7 +302,7 @@ claude-docker-shell() {
     -e AI_NAME="claude" \
     -e AI_COMMAND="claude" \
     "$CLAUDE_IMAGE_NAME" \
-    -lc "start-tmux-layout"
+    -lc "ln -sf /root/.claude/claude.json /root/.claude.json; start-tmux-layout"
 }
 
 opencode-docker-build() {
