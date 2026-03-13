@@ -112,7 +112,20 @@ After editing your rc file, reload it or open a new terminal:
   - Host: `~/.opencode-docker-config`
   - Container: `/root/.local`
 
-You can back up or remove these directories on your host to reset auth.
+Each of these directories contains a `docker-env.env` file that is automatically passed to the corresponding container.
+
+### Passing Environment Variables
+
+To pass environment variables to your AI tools, add them to the `docker-env.env` file in the tool's host configuration directory.
+
+**Example for Claude (`~/.claude-docker-config/docker-env.env`):**
+```env
+ANTHROPIC_BASE_URL=http://host.docker.internal:1234
+ANTHROPIC_AUTH_TOKEN=lm
+ANTHROPIC_MODEL=mlx-community/qwen3.5-9b
+```
+
+You can back up or remove these directories on your host to reset auth or environment variables.
 
 ### Known quirk with codex auth link
 When you run codex-auth-docker-run, Codex may print the sign-in URL with line breaks due to TTY wrapping in Docker. If your terminal doesn’t let you open the link directly:
