@@ -15,10 +15,23 @@ CODEX_IMAGE_NAME="my-codex-image"
 GEMINI_IMAGE_NAME="my-gemini-image"
 CLAUDE_IMAGE_NAME="my-claude-image"
 OPENCODE_IMAGE_NAME="my-opencode-image"
+
 CODEX_CONFIG_PATH="$HOME/.codex-docker-config"
 GEMINI_CONFIG_PATH="$HOME/.gemini-cli-docker-config"
 CLAUDE_CONFIG_PATH="$HOME/.claude-docker-config"
 OPENCODE_CONFIG_PATH="$HOME/.opencode-docker-config"
+
+for dir in \
+  "$CODEX_CONFIG_PATH" \
+  "$GEMINI_CONFIG_PATH" \
+  "$CLAUDE_CONFIG_PATH" \
+  "$OPENCODE_CONFIG_PATH"
+do
+  mkdir -p "$dir"
+  touch "$dir/docker-env.env"
+done
+
+
 AI_DOCKER_TERM_TITLE_ENABLE="${AI_DOCKER_TERM_TITLE_ENABLE:-${CODEX_ITERM_TITLE_ENABLE:-1}}" # Control whether iTerm/tab title tweaks are applied (default: on). Set to "0" to disable.
 
 # Determine the directory of this script (the repo root), even when sourced from elsewhere.
@@ -98,6 +111,7 @@ codex-docker-shell() {
   fi
 
   docker run --rm -it \
+    --env-file "$CODEX_CONFIG_PATH/docker-env.env" \
     --entrypoint "/bin/bash" \
     -v "/etc/localtime:/etc/localtime:ro" \
     -v "$CODEX_CONFIG_PATH:/root/.codex" \
@@ -126,6 +140,7 @@ codex-auth-docker-run() {
     esac
   fi
   docker run --rm -it \
+    --env-file "$CODEX_CONFIG_PATH/docker-env.env" \
     --network="host" \
     --entrypoint="/bin/bash" \
     -v "/etc/localtime:/etc/localtime:ro" \
@@ -197,6 +212,7 @@ gemini-docker-shell() {
   fi
 
   docker run --rm -it \
+    --env-file "$GEMINI_CONFIG_PATH/docker-env.env" \
     --entrypoint "/bin/bash" \
     -v "/etc/localtime:/etc/localtime:ro" \
     -v "$GEMINI_CONFIG_PATH:/root/.gemini" \
@@ -271,6 +287,7 @@ claude-docker-shell() {
   fi
 
   docker run --rm -it \
+    --env-file "$CLAUDE_CONFIG_PATH/docker-env.env" \
     --entrypoint "/bin/bash" \
     -v "/etc/localtime:/etc/localtime:ro" \
     -v "$CLAUDE_CONFIG_PATH:/root/.claude" \
@@ -352,6 +369,7 @@ opencode-docker-shell() {
   fi
 
   docker run --rm -it \
+    --env-file "$OPENCODE_CONFIG_PATH/docker-env.env" \
     --entrypoint "/bin/bash" \
     -v "/etc/localtime:/etc/localtime:ro" \
     -v "$OPENCODE_CONFIG_PATH:/root/.local" \
