@@ -109,8 +109,9 @@ After editing your rc file, reload it or open a new terminal:
   - Host: `~/.claude-docker-config`
   - Container: `/root/.claude` (with `/root/.claude.json` symlinked to `/root/.claude/claude.json`)
 - **OpenCode**:
-  - Host: `~/.opencode-docker-config`
-  - Container: `/root/.local`
+  - Host: `~/.opencode-docker/local` -> Container: `/root/.local`
+  - Host: `~/.opencode-docker/config` -> Container: `/root/.config/opencode`
+  - Host: `~/.opencode-docker/docker-env.env` -> Container environment variables
 
 Each of these directories contains a `docker-env.env` file that is automatically passed to the corresponding container.
 

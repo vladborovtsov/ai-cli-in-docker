@@ -19,13 +19,13 @@ OPENCODE_IMAGE_NAME="my-opencode-image"
 CODEX_CONFIG_PATH="$HOME/.codex-docker-config"
 GEMINI_CONFIG_PATH="$HOME/.gemini-cli-docker-config"
 CLAUDE_CONFIG_PATH="$HOME/.claude-docker-config"
-OPENCODE_CONFIG_PATH="$HOME/.opencode-docker-config"
+OPENCODE_DOCKER_DIR="$HOME/.opencode-docker"
 
 for dir in \
   "$CODEX_CONFIG_PATH" \
   "$GEMINI_CONFIG_PATH" \
   "$CLAUDE_CONFIG_PATH" \
-  "$OPENCODE_CONFIG_PATH"
+  "$OPENCODE_DOCKER_DIR"
 do
   mkdir -p "$dir"
   touch "$dir/docker-env.env"
@@ -33,6 +33,7 @@ do
     touch "$dir/claude.json"
   fi
 done
+mkdir -p "$OPENCODE_DOCKER_DIR/local" "$OPENCODE_DOCKER_DIR/config"
 
 
 AI_DOCKER_TERM_TITLE_ENABLE="${AI_DOCKER_TERM_TITLE_ENABLE:-${CODEX_ITERM_TITLE_ENABLE:-1}}" # Control whether iTerm/tab title tweaks are applied (default: on). Set to "0" to disable.
@@ -372,10 +373,11 @@ opencode-docker-shell() {
   fi
 
   docker run --rm -it \
-    --env-file "$OPENCODE_CONFIG_PATH/docker-env.env" \
+    --env-file "$OPENCODE_DOCKER_DIR/docker-env.env" \
     --entrypoint "/bin/bash" \
     -v "/etc/localtime:/etc/localtime:ro" \
-    -v "$OPENCODE_CONFIG_PATH:/root/.local" \
+    -v "$OPENCODE_DOCKER_DIR/local:/root/.local" \
+    -v "$OPENCODE_DOCKER_DIR/config:/root/.config/opencode" \
     -v "${cwd}:/workspace/$(basename "${cwd}")" \
     -w "/workspace/$(basename "${cwd}")" \
     -e TZ="${TZ:-$(readlink /etc/localtime | sed -E 's/.*zoneinfo\/(.*)/\1/' 2>/dev/null || echo "UTC")}" \
