@@ -390,6 +390,15 @@ opencode-docker-shell() {
     -lc "start-tmux-layout"
 }
 
+ai-docker() {
+  if [ -x "$AI_DOCKER_REPO_DIR/ai-docker.sh" ]; then
+    "$AI_DOCKER_REPO_DIR/ai-docker.sh" "$@"
+  else
+    echo "Error: ai-docker.sh not found or not executable in $AI_DOCKER_REPO_DIR" >&2
+    return 1
+  fi
+}
+
 ai-docker-deactivate() {
-  unset -f codex-docker-build codex-docker-shell codex-auth-docker-run gemini-docker-build gemini-docker-shell claude-docker-build claude-docker-shell opencode-docker-build opencode-docker-shell docker-ai-build-all ai-docker-deactivate
+  unset -f codex-docker-build codex-docker-shell codex-auth-docker-run gemini-docker-build gemini-docker-shell claude-docker-build claude-docker-shell opencode-docker-build opencode-docker-shell docker-ai-build-all ai-docker ai-docker-deactivate
 }

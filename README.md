@@ -9,14 +9,11 @@ Run AI CLI tools (OpenAI Codex, Google Gemini) inside Docker to keep your host c
 - `Dockerfile.claude`: Based on ubuntu:24.04 with @anthropic-ai/claude-code preinstalled.
 - `Dockerfile.opencode`: Based on node:20 with opencode preinstalled.
 - `activate.sh` adds helper shell functions:
-  - `codex-docker-build` — build the Codex image.
-  - `codex-docker-shell` — open an interactive shell in the Codex container.
-  - `gemini-docker-build` — build the Gemini image.
-  - `gemini-docker-shell` — open an interactive shell in the Gemini container.
-  - `claude-docker-build` — build the Claude image.
-  - `claude-docker-shell` — open an interactive shell in the Claude container.
-  - `opencode-docker-build` — build the OpenCode image.
-  - `opencode-docker-shell` — open an interactive shell in the OpenCode container.
+  - `ai-docker` — launch the interactive Terminal User Interface (TUI) to easily manage and run all tools.
+  - `codex-docker-build` / `codex-docker-shell` — build/run the Codex container.
+  - `gemini-docker-build` / `gemini-docker-shell` — build/run the Gemini container.
+  - `claude-docker-build` / `claude-docker-shell` — build/run the Claude container.
+  - `opencode-docker-build` / `opencode-docker-shell` — build/run the OpenCode container.
   - `docker-ai-build-all` — build all AI images without using cache.
   - `codex-auth-docker-run` — run Codex auth flow inside the container.
   - `ai-docker-deactivate` — remove the helper functions from the current shell.
@@ -28,25 +25,27 @@ Run AI CLI tools (OpenAI Codex, Google Gemini) inside Docker to keep your host c
 ### Quick Start
 1) Clone this repo and enter the directory.
 
-2) Build the images:
-   - `source ./activate.sh`
-   - `codex-docker-build` (for Codex)
-   - `gemini-docker-build` (for Gemini)
-   - `claude-docker-build` (for Claude)
-   - `opencode-docker-build` (for OpenCode)
-   - `docker-ai-build-all` (build all images without cache)
+2) Source the activation script:
+   ```bash
+   source ./activate.sh
+   ```
 
-3) Authenticate Codex CLI inside Docker (one-time):
-   - `codex-auth-docker-run`
-   - This uses host networking and persists Codex CLI config under:
-     - Host: `~/.codex-docker-config`
-     - Container: `/root/.codex` (mounted)
+3) Run the interactive TUI tool:
+   ```bash
+   ai-docker
+   ```
+   This loads a zero-dependency menu where you can:
+   - Check if your tool images are built or missing.
+   - Build or rebuild images.
+   - Launch your chosen container shell.
+   - Edit API keys and configuration values (`docker-env.env` files).
+   - Prune stopped containers or dangling images.
 
-4) Start a shell with your current project mounted:
-   - `codex-docker-shell` (for Codex)
-   - `gemini-docker-shell` (for Gemini)
-   - `claude-docker-shell` (for Claude)
-   - `opencode-docker-shell` (for OpenCode)
+4) Or, launch directly via CLI helper commands if you prefer:
+   - `claude-docker-shell`
+   - `gemini-docker-shell`
+   - `codex-docker-shell`
+   - `opencode-docker-shell`
 
 What you get when the container starts:
 - A tmux session named after your current folder (overridable with TMUX_SESSION).
