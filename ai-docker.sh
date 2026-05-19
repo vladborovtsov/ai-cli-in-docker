@@ -25,6 +25,20 @@ CYAN='\033[0;36m'
 BOLD='\033[1m'
 RESET='\033[0m'
 
+# Get the formatted directory path for docker mounts
+get_mount_path() {
+  pwd 2>/dev/null || echo "${PWD:-.}"
+}
+
+# Helper to repeat a character N times
+repeat_char() {
+  local char="$1"
+  local count="$2"
+  local val
+  printf -v val "%${count}s" ""
+  echo -n "${val// /$char}"
+}
+
 # Check if a Docker image is built
 check_image_built() {
   local image_name="$1"
@@ -104,10 +118,34 @@ render_menu() {
   local selected="$1"
   local lines_printed=0
 
+  # Calculate layout widths dynamically based on mount mapping length
+  local mount_path=$(get_mount_path)
+  local base_dir=$(basename "${mount_path}" 2>/dev/null || echo "project")
+  if [ -z "$base_dir" ] || [ "$base_dir" = "." ] || [ "$base_dir" = "/" ]; then
+    base_dir="project"
+  fi
+  local mount_mapping="(mounts: ${mount_path} -> /workspace/${base_dir})"
+  
+  local inside_width=$((48 + ${#mount_mapping}))
+  if [ "$inside_width" -lt 80 ]; then
+    inside_width=80
+  fi
+
+  # Build header borders and title padding dynamically
+  local title_text="🤖 AI CLI IN DOCKER - CONTROL TUI"
+  local title_width=33
+  local padding=$((inside_width - title_width))
+  local left_pad=$((padding / 2))
+  local right_pad=$((padding - left_pad))
+  
+  local left_spaces=$(printf "%${left_pad}s" "")
+  local right_spaces=$(printf "%${right_pad}s" "")
+  local top_border=$(repeat_char "─" "$inside_width")
+
   # Header block
-  echo -e "${BOLD}┌────────────────────────────────────────────────────────┐${RESET}"
-  echo -e "${BOLD}│             🤖 AI CLI IN DOCKER - CONTROL TUI          │${RESET}"
-  echo -e "${BOLD}└────────────────────────────────────────────────────────┘${RESET}"
+  echo -e "${BOLD}┌${top_border}┐${RESET}"
+  echo -e "${BOLD}│${left_spaces}${title_text}${right_spaces}│${RESET}"
+  echo -e "${BOLD}└${top_border}┘${RESET}"
   echo ""
   lines_printed=4
 
@@ -135,13 +173,30 @@ render_menu() {
       )
 
       for i in "${!main_items[@]}"; do
-        if [ "$i" -eq "$selected" ]; then
-          printf "  ${CYAN}▸${RESET} ${BOLD}%-32s${RESET} %s\n" "${main_items[$i]}" "${statuses[$i]}"
-        else
-          if [[ "${main_items[$i]}" == ──* ]]; then
-            printf "    %s\n" "${main_items[$i]}"
+        local item_text="${main_items[$i]}"
+        if [ "$i" -lt 4 ]; then
+          if [ "$i" -eq "$selected" ]; then
+            printf "  ${CYAN}▸${RESET} ${BOLD}%-32s${RESET} %-12s %s\n" "$item_text" "${statuses[$i]}" "$mount_mapping"
           else
-            printf "    %-32s %s\n" "${main_items[$i]}" "${statuses[$i]}"
+            printf "    %-32s %-12s %s\n" "$item_text" "${statuses[$i]}" "$mount_mapping"
+          fi
+        else
+          if [ "$i" -eq "$selected" ]; then
+            if [[ "$item_text" == ──* ]]; then
+              local div_width=$((inside_width - 4))
+              local divider_line=$(repeat_char "─" "$div_width")
+              printf "  %s\n" "$divider_line"
+            else
+              printf "  ${CYAN}▸${RESET} ${BOLD}%s${RESET}\n" "$item_text"
+            fi
+          else
+            if [[ "$item_text" == ──* ]]; then
+              local div_width=$((inside_width - 4))
+              local divider_line=$(repeat_char "─" "$div_width")
+              printf "  %s\n" "$divider_line"
+            else
+              printf "    %s\n" "$item_text"
+            fi
           fi
         fi
         lines_printed=$((lines_printed + 1))
@@ -196,7 +251,9 @@ render_menu() {
 
   # Footer block
   echo ""
-  echo -e "${BOLD}────────────────────────────────────────────────────────${RESET}"
+  local footer_width=$((inside_width + 2))
+  local footer_line=$(repeat_char "─" "$footer_width")
+  echo -e "${BOLD}${footer_line}${RESET}"
   echo -e " [Use ↑/↓ or j/k to navigate, Enter to select, Q/Esc to go back/exit]"
   lines_printed=$((lines_printed + 3))
 
