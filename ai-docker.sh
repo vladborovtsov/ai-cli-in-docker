@@ -27,7 +27,7 @@ RESET='\033[0m'
 
 # Get the formatted directory path for docker mounts
 get_mount_path() {
-  pwd 2>/dev/null || echo "${PWD:-.}"
+  echo "${active_mount_path}"
 }
 
 # Helper to repeat a character N times
@@ -50,10 +50,54 @@ check_image_built() {
 }
 
 # State variables
+LAUNCH_DIR=$(pwd)
+RECENTS_FILE="$HOME/.ai-docker-recents"
+active_mount_path=$(cd "$LAUNCH_DIR" 2>/dev/null && pwd || echo "$LAUNCH_DIR")
+
 current_menu="main"
 selected_index=0
 menu_lines=0
 force_clear=1
+
+# Workspace selection items
+workspace_items=()
+workspace_paths=()
+
+load_workspace_menu() {
+  workspace_items=()
+  workspace_paths=()
+
+  # 1. Current directory
+  local launch_dir
+  launch_dir=$(cd "$LAUNCH_DIR" 2>/dev/null && pwd || echo "$LAUNCH_DIR")
+  workspace_items+=("📍 Current Directory: $launch_dir")
+  workspace_paths+=("$launch_dir")
+
+  # 2. Custom path option
+  workspace_items+=("✏️  Enter Custom Path...")
+  workspace_paths+=("CUSTOM")
+
+  workspace_items+=("──────────────────────────────────────────────────")
+  workspace_paths+=("DIVIDER")
+
+  # 3. Recent directories from file
+  if [ -f "$RECENTS_FILE" ]; then
+    while IFS= read -r dir || [ -n "$dir" ]; do
+      if [ -n "$dir" ] && [ -d "$dir" ]; then
+        local resolved
+        resolved=$(cd "$dir" 2>/dev/null && pwd || echo "$dir")
+        # Don't add current directory to recents list in the menu (it's already option 1)
+        if [ "$resolved" != "$launch_dir" ]; then
+          workspace_items+=("🕒 Recent: $resolved")
+          workspace_paths+=("$resolved")
+        fi
+      fi
+    done < "$RECENTS_FILE"
+  fi
+
+  workspace_items+=("⬅️  Back to Main Menu")
+  workspace_paths+=("BACK")
+}
 
 # Menu definition lists
 main_items=(
@@ -61,6 +105,7 @@ main_items=(
   "💬 Launch Gemini CLI"
   "💬 Launch OpenAI Codex"
   "💬 Launch OpenCode"
+  "📁 Change Workspace Directory..."
   "──────────────────────────────────────────────────"
   "🛠️  Rebuild/Update Images..."
   "⚙️  Edit Environment Files..."
@@ -99,6 +144,7 @@ get_menu_length() {
     build) echo "${#build_items[@]}" ;;
     config) echo "${#config_items[@]}" ;;
     cleanup) echo "${#cleanup_items[@]}" ;;
+    workspace) load_workspace_menu; echo "${#workspace_items[@]}" ;;
   esac
 }
 
@@ -165,6 +211,7 @@ render_menu() {
         "[$gemini_status]"
         "[$codex_status]"
         "[$opencode_status]"
+        ""
         ""
         ""
         ""
@@ -247,6 +294,37 @@ render_menu() {
         lines_printed=$((lines_printed + 1))
       done
       ;;
+
+    workspace)
+      echo -e "  ${BOLD}Select or change the active workspace directory:${RESET}"
+      echo -e "  Current active: ${GREEN}${active_mount_path}${RESET}"
+      echo ""
+      lines_printed=$((lines_printed + 3))
+
+      load_workspace_menu
+
+      for i in "${!workspace_items[@]}"; do
+        local item_text="${workspace_items[$i]}"
+        if [ "$i" -eq "$selected" ]; then
+          if [[ "$item_text" == ──* ]]; then
+            local div_width=$((inside_width - 4))
+            local divider_line=$(repeat_char "─" "$div_width")
+            printf "  %s\n" "$divider_line"
+          else
+            printf "  ${CYAN}▸${RESET} ${BOLD}%s${RESET}\n" "$item_text"
+          fi
+        else
+          if [[ "$item_text" == ──* ]]; then
+            local div_width=$((inside_width - 4))
+            local divider_line=$(repeat_char "─" "$div_width")
+            printf "  %s\n" "$divider_line"
+          else
+            printf "    %s\n" "$item_text"
+          fi
+        fi
+        lines_printed=$((lines_printed + 1))
+      done
+      ;;
   esac
 
   # Footer block
@@ -267,14 +345,18 @@ move_selection() {
 
   if [ "$dir" = "UP" ]; then
     selected_index=$(( (selected_index - 1 + len) % len ))
-    # Skip divider in main menu
-    if [ "$current_menu" = "main" ] && [ "$selected_index" -eq 4 ]; then
+    # Skip dividers
+    if [ "$current_menu" = "main" ] && [ "$selected_index" -eq 5 ]; then
+      selected_index=$(( (selected_index - 1 + len) % len ))
+    elif [ "$current_menu" = "workspace" ] && [[ "${workspace_items[$selected_index]}" == ──* ]]; then
       selected_index=$(( (selected_index - 1 + len) % len ))
     fi
   else
     selected_index=$(( (selected_index + 1) % len ))
-    # Skip divider in main menu
-    if [ "$current_menu" = "main" ] && [ "$selected_index" -eq 4 ]; then
+    # Skip dividers
+    if [ "$current_menu" = "main" ] && [ "$selected_index" -eq 5 ]; then
+      selected_index=$(( (selected_index + 1) % len ))
+    elif [ "$current_menu" = "workspace" ] && [[ "${workspace_items[$selected_index]}" == ──* ]]; then
       selected_index=$(( (selected_index + 1) % len ))
     fi
   fi
@@ -319,7 +401,7 @@ launch_tool() {
   echo ""
   
   # Run function
-  $shell_func || true
+  $shell_func "$active_mount_path" || true
 
   tput civis
   force_clear=1
@@ -406,11 +488,12 @@ handle_select() {
         1) launch_tool "$GEMINI_IMAGE_NAME" gemini-docker-build gemini-docker-shell ;;
         2) launch_tool "$CODEX_IMAGE_NAME" codex-docker-build codex-docker-shell ;;
         3) launch_tool "$OPENCODE_IMAGE_NAME" opencode-docker-build opencode-docker-shell ;;
-        4) ;; # divider
-        5) current_menu="build"; selected_index=0; force_clear=1 ;;
-        6) current_menu="config"; selected_index=0; force_clear=1 ;;
-        7) current_menu="cleanup"; selected_index=0; force_clear=1 ;;
-        8) exit 0 ;;
+        4) current_menu="workspace"; selected_index=0; force_clear=1 ;;
+        5) ;; # divider
+        6) current_menu="build"; selected_index=0; force_clear=1 ;;
+        7) current_menu="config"; selected_index=0; force_clear=1 ;;
+        8) current_menu="cleanup"; selected_index=0; force_clear=1 ;;
+        9) exit 0 ;;
       esac
       ;;
     build)
@@ -438,6 +521,60 @@ handle_select() {
         1) run_cleanup prune_images ;;
         2) run_cleanup remove_all_images ;;
         3) handle_back ;;
+      esac
+      ;;
+    workspace)
+      local path="${workspace_paths[$selected_index]}"
+      case "$path" in
+        CUSTOM)
+          tput cnorm
+          clear
+          echo -e "${BOLD}Enter Custom Workspace Path${RESET}"
+          echo "You can type an absolute or relative path to a directory."
+          echo ""
+          read -rp "Path: " custom_input
+          if [ -n "$custom_input" ]; then
+            # Expand ~ if present
+            custom_input="${custom_input/#\~/$HOME}"
+            if [ -d "$custom_input" ]; then
+              active_mount_path=$(cd "$custom_input" 2>/dev/null && pwd)
+              # Also add to recents list
+              _ai_docker_update_recents "$active_mount_path"
+              echo -e "${GREEN}Active workspace directory set to: $active_mount_path${RESET}"
+            else
+              echo -e "${RED}Error: Directory '$custom_input' does not exist.${RESET}"
+            fi
+          else
+            echo "Cancelled."
+          fi
+          sleep 1.5
+          tput civis
+          force_clear=1
+          ;;
+        DIVIDER)
+          ;;
+        BACK)
+          handle_back
+          ;;
+        *)
+          # A directory path was selected
+          if [ -d "$path" ]; then
+            active_mount_path="$path"
+            # Update recents order
+            _ai_docker_update_recents "$active_mount_path"
+            # Return to main menu
+            current_menu="main"
+            selected_index=0
+            force_clear=1
+          else
+            tput cnorm
+            clear
+            echo -e "${RED}Error: Directory '$path' no longer exists.${RESET}"
+            sleep 1.5
+            tput civis
+            force_clear=1
+          fi
+          ;;
       esac
       ;;
   esac
@@ -472,6 +609,7 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 # Start application loop
+_ai_docker_update_recents "$(pwd)"
 tput civis
 clear
 

@@ -55,6 +55,58 @@ else
 fi
 unset _ai_docker_script_path
 
+AI_DOCKER_RECENTS_FILE="$HOME/.ai-docker-recents"
+
+_ai_docker_update_recents() {
+  local path_to_add="$1"
+  if [ -z "$path_to_add" ] || [ ! -d "$path_to_add" ]; then
+    return
+  fi
+
+  local resolved_add
+  resolved_add=$(cd "$path_to_add" 2>/dev/null && pwd || echo "$path_to_add")
+
+  local dirs=()
+  dirs+=("$resolved_add")
+
+  if [ -f "$AI_DOCKER_RECENTS_FILE" ]; then
+    while IFS= read -r line || [ -n "$line" ]; do
+      if [ -n "$line" ] && [ -d "$line" ]; then
+        local resolved
+        resolved=$(cd "$line" 2>/dev/null && pwd || echo "$line")
+        if [ -d "$resolved" ]; then
+          dirs+=("$resolved")
+        fi
+      fi
+    done < "$AI_DOCKER_RECENTS_FILE"
+  fi
+
+  local unique_dirs=()
+  for d in "${dirs[@]}"; do
+    if [ "${#unique_dirs[@]}" -ge 10 ]; then
+      break
+    fi
+    local dup=0
+    if [ "${#unique_dirs[@]}" -gt 0 ]; then
+      for u in "${unique_dirs[@]}"; do
+        if [ "$u" = "$d" ]; then
+          dup=1
+          break
+        fi
+      done
+    fi
+    if [ "$dup" -eq 0 ]; then
+      unique_dirs+=("$d")
+    fi
+  done
+
+  if [ "${#unique_dirs[@]}" -gt 0 ]; then
+    printf "%s\n" "${unique_dirs[@]}" > "$AI_DOCKER_RECENTS_FILE"
+  else
+    > "$AI_DOCKER_RECENTS_FILE"
+  fi
+}
+
 codex-docker-build() {
   # Accept optional flag: --no-cache
   local no_cache_flag=""
@@ -88,7 +140,18 @@ codex-docker-build() {
 
 codex-docker-shell() {
   local cwd
-  cwd="$(pwd)"
+  if [ -n "${1-}" ]; then
+    if [ ! -d "$1" ]; then
+      echo "Error: Directory '$1' does not exist." >&2
+      return 1
+    fi
+    cwd=$(cd "$1" && pwd)
+  else
+    cwd="$(pwd)"
+  fi
+
+  _ai_docker_update_recents "$cwd"
+
   if [ "$cwd" = "$HOME" ]; then
     echo "⚠️ Warning: You are running codex-docker-shell from your HOME directory." >&2
     echo "This will mount your entire HOME into the container workspace." >&2
@@ -132,7 +195,18 @@ codex-docker-shell() {
 
 codex-auth-docker-run() {
   local cwd
-  cwd="$(pwd)"
+  if [ -n "${1-}" ]; then
+    if [ ! -d "$1" ]; then
+      echo "Error: Directory '$1' does not exist." >&2
+      return 1
+    fi
+    cwd=$(cd "$1" && pwd)
+  else
+    cwd="$(pwd)"
+  fi
+
+  _ai_docker_update_recents "$cwd"
+
   if [ "$cwd" = "$HOME" ]; then
     echo "⚠️ Warning: You are running codex-auth-docker-run from your HOME directory." >&2
     echo "This will mount your entire HOME into the container workspace." >&2
@@ -189,7 +263,18 @@ gemini-docker-build() {
 
 gemini-docker-shell() {
   local cwd
-  cwd="$(pwd)"
+  if [ -n "${1-}" ]; then
+    if [ ! -d "$1" ]; then
+      echo "Error: Directory '$1' does not exist." >&2
+      return 1
+    fi
+    cwd=$(cd "$1" && pwd)
+  else
+    cwd="$(pwd)"
+  fi
+
+  _ai_docker_update_recents "$cwd"
+
   if [ "$cwd" = "$HOME" ]; then
     echo "⚠️ Warning: You are running gemini-docker-shell from your HOME directory." >&2
     echo "This will mount your entire HOME into the container workspace." >&2
@@ -264,7 +349,18 @@ claude-docker-build() {
 
 claude-docker-shell() {
   local cwd
-  cwd="$(pwd)"
+  if [ -n "${1-}" ]; then
+    if [ ! -d "$1" ]; then
+      echo "Error: Directory '$1' does not exist." >&2
+      return 1
+    fi
+    cwd=$(cd "$1" && pwd)
+  else
+    cwd="$(pwd)"
+  fi
+
+  _ai_docker_update_recents "$cwd"
+
   if [ "$cwd" = "$HOME" ]; then
     echo "⚠️ Warning: You are running claude-docker-shell from your HOME directory." >&2
     echo "This will mount your entire HOME into the container workspace." >&2
@@ -346,7 +442,18 @@ docker-ai-build-all() {
 
 opencode-docker-shell() {
   local cwd
-  cwd="$(pwd)"
+  if [ -n "${1-}" ]; then
+    if [ ! -d "$1" ]; then
+      echo "Error: Directory '$1' does not exist." >&2
+      return 1
+    fi
+    cwd=$(cd "$1" && pwd)
+  else
+    cwd="$(pwd)"
+  fi
+
+  _ai_docker_update_recents "$cwd"
+
   if [ "$cwd" = "$HOME" ]; then
     echo "⚠️ Warning: You are running opencode-docker-shell from your HOME directory." >&2
     echo "This will mount your entire HOME into the container workspace." >&2
@@ -400,5 +507,5 @@ ai-docker() {
 }
 
 ai-docker-deactivate() {
-  unset -f codex-docker-build codex-docker-shell codex-auth-docker-run gemini-docker-build gemini-docker-shell claude-docker-build claude-docker-shell opencode-docker-build opencode-docker-shell docker-ai-build-all ai-docker ai-docker-deactivate
+  unset -f _ai_docker_update_recents codex-docker-build codex-docker-shell codex-auth-docker-run gemini-docker-build gemini-docker-shell claude-docker-build claude-docker-shell opencode-docker-build opencode-docker-shell docker-ai-build-all ai-docker ai-docker-deactivate
 }
