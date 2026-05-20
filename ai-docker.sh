@@ -27,7 +27,7 @@ RESET='\033[0m'
 
 # Get the formatted directory path for docker mounts
 get_mount_path() {
-  echo "${active_mount_path}"
+  builtin echo "${active_mount_path}"
 }
 
 # Helper to repeat a character N times
@@ -35,8 +35,8 @@ repeat_char() {
   local char="$1"
   local count="$2"
   local val
-  printf -v val "%${count}s" ""
-  echo -n "${val// /$char}"
+  builtin printf -v val "%${count}s" ""
+  builtin echo -n "${val// /$char}"
 }
 
 # Check if a Docker image is built
@@ -59,6 +59,74 @@ selected_index=0
 menu_lines=0
 force_clear=1
 
+# Image status caching variables
+claude_built=""
+gemini_built=""
+codex_built=""
+opencode_built=""
+
+update_image_statuses() {
+  claude_built=$(check_image_built "$CLAUDE_IMAGE_NAME")
+  gemini_built=$(check_image_built "$GEMINI_IMAGE_NAME")
+  codex_built=$(check_image_built "$CODEX_IMAGE_NAME")
+  opencode_built=$(check_image_built "$OPENCODE_IMAGE_NAME")
+}
+
+# Rendering frame buffering override to eliminate subshells and forks
+CAPTURE_OUTPUT=0
+FRAME_BUF=""
+
+echo() {
+  if [ "${CAPTURE_OUTPUT-0}" -eq 1 ]; then
+    local flag_e=0
+    local flag_n=0
+    local args=()
+    local parsing_opts=1
+    for arg in "$@"; do
+      if [ "$parsing_opts" -eq 1 ]; then
+        if [ "$arg" = "-e" ]; then
+          flag_e=1
+        elif [ "$arg" = "-n" ]; then
+          flag_n=1
+        elif [ "$arg" = "-ne" ] || [ "$arg" = "-en" ]; then
+          flag_e=1
+          flag_n=1
+        else
+          parsing_opts=0
+          args+=("$arg")
+        fi
+      else
+        args+=("$arg")
+      fi
+    done
+    
+    local formatted
+    if [ "$flag_e" -eq 1 ]; then
+      builtin printf -v formatted "%b" "${args[*]-}"
+    else
+      builtin printf -v formatted "%s" "${args[*]-}"
+    fi
+    
+    if [ "$flag_n" -eq 0 ]; then
+      formatted+="
+"
+    fi
+    FRAME_BUF+="$formatted"
+  else
+    builtin echo "$@"
+  fi
+}
+
+printf() {
+  if [ "${CAPTURE_OUTPUT-0}" -eq 1 ]; then
+    local formatted
+    builtin printf -v formatted "$@"
+    FRAME_BUF+="$formatted"
+  else
+    builtin printf "$@"
+  fi
+}
+
 # Workspace selection items
 workspace_items=()
 workspace_paths=()
@@ -69,7 +137,7 @@ load_workspace_menu() {
 
   # 1. Current directory
   local launch_dir
-  launch_dir=$(cd "$LAUNCH_DIR" 2>/dev/null && pwd || echo "$LAUNCH_DIR")
+  launch_dir=$(cd "$LAUNCH_DIR" 2>/dev/null && pwd || builtin echo "$LAUNCH_DIR")
   workspace_items+=("📍 Current Directory: $launch_dir")
   workspace_paths+=("$launch_dir")
 
@@ -85,7 +153,7 @@ load_workspace_menu() {
     while IFS= read -r dir || [ -n "$dir" ]; do
       if [ -n "$dir" ] && [ -d "$dir" ]; then
         local resolved
-        resolved=$(cd "$dir" 2>/dev/null && pwd || echo "$dir")
+        resolved=$(cd "$dir" 2>/dev/null && pwd || builtin echo "$dir")
         # Don't add current directory to recents list in the menu (it's already option 1)
         if [ "$resolved" != "$launch_dir" ]; then
           workspace_items+=("🕒 Recent: $resolved")
@@ -148,16 +216,7 @@ get_menu_length() {
   esac
 }
 
-# Clear lines previously drawn for flicker-free rendering
-clear_lines() {
-  local num_lines="$1"
-  if [ "$num_lines" -gt 0 ]; then
-    # Move cursor up N lines
-    echo -ne "\033[${num_lines}A"
-    # Clear from cursor to end of screen
-    echo -ne "\033[J"
-  fi
-}
+
 
 # Render the active menu
 render_menu() {
@@ -165,8 +224,8 @@ render_menu() {
   local lines_printed=0
 
   # Calculate layout widths dynamically based on mount mapping length
-  local mount_path=$(get_mount_path)
-  local base_dir=$(basename "${mount_path}" 2>/dev/null || echo "project")
+  local mount_path="${active_mount_path}"
+  local base_dir="${mount_path##*/}"
   if [ -z "$base_dir" ] || [ "$base_dir" = "." ] || [ "$base_dir" = "/" ]; then
     base_dir="project"
   fi
@@ -184,8 +243,10 @@ render_menu() {
   local left_pad=$((padding / 2))
   local right_pad=$((padding - left_pad))
   
-  local left_spaces=$(printf "%${left_pad}s" "")
-  local right_spaces=$(printf "%${right_pad}s" "")
+  local left_spaces
+  builtin printf -v left_spaces "%${left_pad}s" ""
+  local right_spaces
+  builtin printf -v right_spaces "%${right_pad}s" ""
   local top_border=$(repeat_char "─" "$inside_width")
 
   # Header block
@@ -201,16 +262,11 @@ render_menu() {
       echo ""
       lines_printed=$((lines_printed + 2))
 
-      local claude_status=$(check_image_built "$CLAUDE_IMAGE_NAME")
-      local gemini_status=$(check_image_built "$GEMINI_IMAGE_NAME")
-      local codex_status=$(check_image_built "$CODEX_IMAGE_NAME")
-      local opencode_status=$(check_image_built "$OPENCODE_IMAGE_NAME")
-
       local statuses=(
-        "[$claude_status]"
-        "[$gemini_status]"
-        "[$codex_status]"
-        "[$opencode_status]"
+        "[$claude_built]"
+        "[$gemini_built]"
+        "[$codex_built]"
+        "[$opencode_built]"
         ""
         ""
         ""
@@ -332,7 +388,7 @@ render_menu() {
   local footer_width=$((inside_width + 2))
   local footer_line=$(repeat_char "─" "$footer_width")
   echo -e "${BOLD}${footer_line}${RESET}"
-  echo -e " [Use ↑/↓ or j/k to navigate, Enter to select, Q/Esc to go back/exit]"
+  echo -e " [Use ↑/↓ or j/k to navigate, Enter to select, Q/Esc to go back/exit]\033[J"
   lines_printed=$((lines_printed + 3))
 
   menu_lines="$lines_printed"
@@ -403,6 +459,9 @@ launch_tool() {
   # Run function
   $shell_func "$active_mount_path" || true
 
+  # Update cached image statuses
+  update_image_statuses
+
   tput civis
   force_clear=1
 }
@@ -421,6 +480,8 @@ run_build() {
     echo ""
     echo -e "${RED}Build process failed.${RESET}"
   fi
+  # Update cached image statuses
+  update_image_statuses
   echo ""
   read -rp "Press [Enter] to return to build menu..."
   tput civis
@@ -462,6 +523,8 @@ run_cleanup() {
       docker rmi -f "$CLAUDE_IMAGE_NAME" "$GEMINI_IMAGE_NAME" "$CODEX_IMAGE_NAME" "$OPENCODE_IMAGE_NAME" 2>/dev/null || true
       ;;
   esac
+  # Update cached image statuses
+  update_image_statuses
   echo ""
   read -rp "Press [Enter] to return to cleanup menu..."
   tput civis
@@ -610,26 +673,48 @@ trap cleanup EXIT INT TERM
 
 # Start application loop
 _ai_docker_update_recents "$(pwd)"
+update_image_statuses
 tput civis
 clear
 
 while true; do
+  if [ "$current_menu" = "workspace" ]; then
+    load_workspace_menu
+  fi
+
+  # Use the overridden echo/printf buffering (0 subshells, 0 forks)
+  FRAME_BUF=""
+  CAPTURE_OUTPUT=1
+  render_menu "$selected_index"
+  CAPTURE_OUTPUT=0
+
+  # Calculate menu_lines from the output structure
+  newlines="${FRAME_BUF//[^$'\n']/}"
+  menu_lines="${#newlines}"
+
+  # Buffer the clear/move and render operations to write them in a single frame
+  ESC=$'\e'
+  frame_buf=""
   if [ "$force_clear" -eq 1 ]; then
     clear
     force_clear=0
+  else
+    if [ "$menu_lines" -gt 0 ]; then
+      frame_buf+="${ESC}[${menu_lines}A${ESC}[J"
+    fi
   fi
-  
-  render_menu "$selected_index"
+  frame_buf+="$FRAME_BUF"
+
+  # Print the entire frame in a single stdout write to eliminate terminal flicker
+  printf "%s" "$frame_buf"
   
   key=$(read_key)
   case "$key" in
     UP)
       move_selection "UP"
-      clear_lines "$menu_lines"
       ;;
     DOWN)
       move_selection "DOWN"
-      clear_lines "$menu_lines"
       ;;
     ENTER)
       handle_select
@@ -638,7 +723,6 @@ while true; do
       handle_back
       ;;
     *)
-      clear_lines "$menu_lines"
       ;;
   esac
 done
