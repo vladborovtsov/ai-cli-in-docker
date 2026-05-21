@@ -40,7 +40,7 @@ AI_DOCKER_TERM_TITLE_ENABLE="${AI_DOCKER_TERM_TITLE_ENABLE:-${CODEX_ITERM_TITLE_
 
 # Determine the directory of this script (the repo root), even when sourced from elsewhere.
 # Works with Bash and most POSIX shells; realpath fallback if available.
-if [ -n "$BASH_SOURCE" ]; then
+if [ -n "${BASH_SOURCE-}" ]; then
   _ai_docker_script_path="$BASH_SOURCE"
 else
   # Fallback: when $BASH_SOURCE is not set (other shells), try $0 if sourced via ". ./activate.sh"
@@ -105,6 +105,72 @@ _ai_docker_update_recents() {
   else
     > "$AI_DOCKER_RECENTS_FILE"
   fi
+}
+
+_ai_docker_is_linux_host() {
+  [ "$(uname -s 2>/dev/null || echo "")" = "Linux" ]
+}
+
+_ai_docker_should_mount_localtime() {
+  _ai_docker_is_linux_host && [ -e "/etc/localtime" ]
+}
+
+_ai_docker_detect_tz() {
+  if [ -n "${TZ-}" ]; then
+    echo "$TZ"
+    return
+  fi
+
+  if command -v timedatectl >/dev/null 2>&1; then
+    local tz_timedatectl
+    tz_timedatectl="$(timedatectl show --property=Timezone --value 2>/dev/null || true)"
+    if [ -n "$tz_timedatectl" ] && [ "$tz_timedatectl" != "n/a" ]; then
+      echo "$tz_timedatectl"
+      return
+    fi
+  fi
+
+  if [ -f "/etc/timezone" ]; then
+    local tz_file
+    tz_file="$(tr -d '\r\n' < /etc/timezone 2>/dev/null || true)"
+    if [ -n "$tz_file" ]; then
+      echo "$tz_file"
+      return
+    fi
+  fi
+
+  local localtime_path=""
+  if command -v realpath >/dev/null 2>&1; then
+    localtime_path="$(realpath /etc/localtime 2>/dev/null || true)"
+  fi
+  if [ -z "$localtime_path" ]; then
+    localtime_path="$(readlink /etc/localtime 2>/dev/null || true)"
+  fi
+  case "$localtime_path" in
+    *zoneinfo/*)
+      echo "${localtime_path#*zoneinfo/}"
+      return
+      ;;
+  esac
+
+  if command -v systemsetup >/dev/null 2>&1; then
+    local tz_systemsetup
+    tz_systemsetup="$(systemsetup -gettimezone 2>/dev/null | sed -E 's/^Time Zone: *//; s/^[[:space:]]+//; s/[[:space:]]+$//' || true)"
+    if [ -n "$tz_systemsetup" ]; then
+      echo "$tz_systemsetup"
+      return
+    fi
+  fi
+
+  echo "UTC"
+}
+
+_ai_docker_should_use_host_network() {
+  case "${AI_DOCKER_USE_HOST_NETWORK:-auto}" in
+    1|true|TRUE|yes|YES) return 0 ;;
+    0|false|FALSE|no|NO) return 1 ;;
+  esac
+  _ai_docker_is_linux_host
 }
 
 codex-docker-build() {
@@ -177,20 +243,33 @@ codex-docker-shell() {
     printf '\033]0;%s\007' "${_codex_title}" 2>/dev/null || true
   fi
 
-  docker run --rm -it \
-    --env-file "$CODEX_CONFIG_PATH/docker-env.env" \
-    --entrypoint "/bin/bash" \
-    -v "/etc/localtime:/etc/localtime:ro" \
-    -v "$CODEX_CONFIG_PATH:/root/.codex" \
-    -v "${cwd}:/workspace/$(basename "${cwd}")" \
-    -w "/workspace/$(basename "${cwd}")" \
-    -e TZ="${TZ:-$(readlink /etc/localtime | sed -E 's/.*zoneinfo\/(.*)/\1/' 2>/dev/null || echo "UTC")}" \
-    -e TERM="${TERM:-xterm-256color}" \
-    -e TMUX_SESSION="$(basename "${cwd}")" \
-    -e AI_NAME="codex" \
-    -e AI_COMMAND="codex" \
-    "$CODEX_IMAGE_NAME" \
+  local workspace_name
+  workspace_name="$(basename "${cwd}")"
+  local tz_value
+  tz_value="$(_ai_docker_detect_tz)"
+
+  local docker_args=(
+    --rm -it
+    --env-file "$CODEX_CONFIG_PATH/docker-env.env"
+    --entrypoint "/bin/bash"
+  )
+  if _ai_docker_should_mount_localtime; then
+    docker_args+=(-v "/etc/localtime:/etc/localtime:ro")
+  fi
+  docker_args+=(
+    -v "$CODEX_CONFIG_PATH:/root/.codex"
+    -v "${cwd}:/workspace/${workspace_name}"
+    -w "/workspace/${workspace_name}"
+    -e "TZ=${tz_value}"
+    -e "TERM=${TERM:-xterm-256color}"
+    -e "TMUX_SESSION=${workspace_name}"
+    -e AI_NAME=codex
+    -e AI_COMMAND=codex
+    "$CODEX_IMAGE_NAME"
     -lc "start-tmux-layout"
+  )
+
+  docker run "${docker_args[@]}"
 }
 
 codex-auth-docker-run() {
@@ -217,17 +296,32 @@ codex-auth-docker-run() {
       *) echo "Canceled." >&2; return 1 ;;
     esac
   fi
-  docker run --rm -it \
-    --env-file "$CODEX_CONFIG_PATH/docker-env.env" \
-    --network="host" \
-    --entrypoint="/bin/bash" \
-    -v "/etc/localtime:/etc/localtime:ro" \
-    -v "$CODEX_CONFIG_PATH:/root/.codex" \
-    -v "${cwd}:/workspace/$(basename "${cwd}")" \
-    -w "/workspace/$(basename "${cwd}")" \
-    -e TZ="${TZ:-$(readlink /etc/localtime | sed -E 's/.*zoneinfo\/(.*)/\1/' 2>/dev/null || echo "UTC")}" \
-    "$CODEX_IMAGE_NAME" \
+  local workspace_name
+  workspace_name="$(basename "${cwd}")"
+  local tz_value
+  tz_value="$(_ai_docker_detect_tz)"
+
+  local docker_args=(
+    --rm -it
+    --env-file "$CODEX_CONFIG_PATH/docker-env.env"
+    --entrypoint="/bin/bash"
+  )
+  if _ai_docker_should_use_host_network; then
+    docker_args+=(--network="host")
+  fi
+  if _ai_docker_should_mount_localtime; then
+    docker_args+=(-v "/etc/localtime:/etc/localtime:ro")
+  fi
+  docker_args+=(
+    -v "$CODEX_CONFIG_PATH:/root/.codex"
+    -v "${cwd}:/workspace/${workspace_name}"
+    -w "/workspace/${workspace_name}"
+    -e "TZ=${tz_value}"
+    "$CODEX_IMAGE_NAME"
     -c ". /root/.nvm/nvm.sh && screen codex auth"
+  )
+
+  docker run "${docker_args[@]}"
 }
 
 gemini-docker-build() {
@@ -300,20 +394,33 @@ gemini-docker-shell() {
     printf '\033]0;%s\007' "${_gemini_title}" 2>/dev/null || true
   fi
 
-  docker run --rm -it \
-    --env-file "$GEMINI_CONFIG_PATH/docker-env.env" \
-    --entrypoint "/bin/bash" \
-    -v "/etc/localtime:/etc/localtime:ro" \
-    -v "$GEMINI_CONFIG_PATH:/root/.gemini" \
-    -v "${cwd}:/workspace/$(basename "${cwd}")" \
-    -w "/workspace/$(basename "${cwd}")" \
-    -e TZ="${TZ:-$(readlink /etc/localtime | sed -E 's/.*zoneinfo\/(.*)/\1/' 2>/dev/null || echo "UTC")}" \
-    -e TERM="${TERM:-xterm-256color}" \
-    -e TMUX_SESSION="$(basename "${cwd}")" \
-    -e AI_NAME="gemini" \
-    -e AI_COMMAND="gemini" \
-    "$GEMINI_IMAGE_NAME" \
+  local workspace_name
+  workspace_name="$(basename "${cwd}")"
+  local tz_value
+  tz_value="$(_ai_docker_detect_tz)"
+
+  local docker_args=(
+    --rm -it
+    --env-file "$GEMINI_CONFIG_PATH/docker-env.env"
+    --entrypoint "/bin/bash"
+  )
+  if _ai_docker_should_mount_localtime; then
+    docker_args+=(-v "/etc/localtime:/etc/localtime:ro")
+  fi
+  docker_args+=(
+    -v "$GEMINI_CONFIG_PATH:/root/.gemini"
+    -v "${cwd}:/workspace/${workspace_name}"
+    -w "/workspace/${workspace_name}"
+    -e "TZ=${tz_value}"
+    -e "TERM=${TERM:-xterm-256color}"
+    -e "TMUX_SESSION=${workspace_name}"
+    -e AI_NAME=gemini
+    -e AI_COMMAND=gemini
+    "$GEMINI_IMAGE_NAME"
     -lc "start-tmux-layout"
+  )
+
+  docker run "${docker_args[@]}"
 }
 
 claude-docker-build() {
@@ -386,20 +493,33 @@ claude-docker-shell() {
     printf '\033]0;%s\007' "${_claude_title}" 2>/dev/null || true
   fi
 
-  docker run --rm -it \
-    --env-file "$CLAUDE_CONFIG_PATH/docker-env.env" \
-    --entrypoint "/bin/bash" \
-    -v "/etc/localtime:/etc/localtime:ro" \
-    -v "$CLAUDE_CONFIG_PATH:/root/.claude" \
-    -v "${cwd}:/workspace/$(basename "${cwd}")" \
-    -w "/workspace/$(basename "${cwd}")" \
-    -e TZ="${TZ:-$(readlink /etc/localtime | sed -E 's/.*zoneinfo\/(.*)/\1/' 2>/dev/null || echo "UTC")}" \
-    -e TERM="${TERM:-xterm-256color}" \
-    -e TMUX_SESSION="$(basename "${cwd}")" \
-    -e AI_NAME="claude" \
-    -e AI_COMMAND="claude" \
-    "$CLAUDE_IMAGE_NAME" \
+  local workspace_name
+  workspace_name="$(basename "${cwd}")"
+  local tz_value
+  tz_value="$(_ai_docker_detect_tz)"
+
+  local docker_args=(
+    --rm -it
+    --env-file "$CLAUDE_CONFIG_PATH/docker-env.env"
+    --entrypoint "/bin/bash"
+  )
+  if _ai_docker_should_mount_localtime; then
+    docker_args+=(-v "/etc/localtime:/etc/localtime:ro")
+  fi
+  docker_args+=(
+    -v "$CLAUDE_CONFIG_PATH:/root/.claude"
+    -v "${cwd}:/workspace/${workspace_name}"
+    -w "/workspace/${workspace_name}"
+    -e "TZ=${tz_value}"
+    -e "TERM=${TERM:-xterm-256color}"
+    -e "TMUX_SESSION=${workspace_name}"
+    -e AI_NAME=claude
+    -e AI_COMMAND=claude
+    "$CLAUDE_IMAGE_NAME"
     -lc "ln -sf /root/.claude/claude.json /root/.claude.json; start-tmux-layout"
+  )
+
+  docker run "${docker_args[@]}"
 }
 
 opencode-docker-build() {
@@ -479,22 +599,35 @@ opencode-docker-shell() {
     printf '\033]0;%s\007' "${_opencode_title}" 2>/dev/null || true
   fi
 
-  docker run --rm -it \
-    --env-file "$OPENCODE_DOCKER_DIR/docker-env.env" \
-    --entrypoint "/bin/bash" \
-    -v "/etc/localtime:/etc/localtime:ro" \
-    -v "$OPENCODE_DOCKER_DIR/local:/root/.local" \
-    -v "$OPENCODE_DOCKER_DIR/config:/root/.config/opencode" \
-    -v "${cwd}:/workspace/$(basename "${cwd}")" \
-    -w "/workspace/$(basename "${cwd}")" \
-    -e TZ="${TZ:-$(readlink /etc/localtime | sed -E 's/.*zoneinfo\/(.*)/\1/' 2>/dev/null || echo "UTC")}" \
-    -e TERM="${TERM:-xterm-256color}" \
-    -e TMUX_SESSION="$(basename "${cwd}")" \
-    -e AI_NAME="opencode" \
-    -e AI_COMMAND="opencode" \
-    -e PATH="/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin" \
-    "$OPENCODE_IMAGE_NAME" \
+  local workspace_name
+  workspace_name="$(basename "${cwd}")"
+  local tz_value
+  tz_value="$(_ai_docker_detect_tz)"
+
+  local docker_args=(
+    --rm -it
+    --env-file "$OPENCODE_DOCKER_DIR/docker-env.env"
+    --entrypoint "/bin/bash"
+  )
+  if _ai_docker_should_mount_localtime; then
+    docker_args+=(-v "/etc/localtime:/etc/localtime:ro")
+  fi
+  docker_args+=(
+    -v "$OPENCODE_DOCKER_DIR/local:/root/.local"
+    -v "$OPENCODE_DOCKER_DIR/config:/root/.config/opencode"
+    -v "${cwd}:/workspace/${workspace_name}"
+    -w "/workspace/${workspace_name}"
+    -e "TZ=${tz_value}"
+    -e "TERM=${TERM:-xterm-256color}"
+    -e "TMUX_SESSION=${workspace_name}"
+    -e AI_NAME=opencode
+    -e AI_COMMAND=opencode
+    -e PATH=/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin
+    "$OPENCODE_IMAGE_NAME"
     -lc "start-tmux-layout"
+  )
+
+  docker run "${docker_args[@]}"
 }
 
 ai-docker() {
@@ -507,5 +640,5 @@ ai-docker() {
 }
 
 ai-docker-deactivate() {
-  unset -f _ai_docker_update_recents codex-docker-build codex-docker-shell codex-auth-docker-run gemini-docker-build gemini-docker-shell claude-docker-build claude-docker-shell opencode-docker-build opencode-docker-shell docker-ai-build-all ai-docker ai-docker-deactivate
+  unset -f _ai_docker_update_recents _ai_docker_is_linux_host _ai_docker_should_mount_localtime _ai_docker_detect_tz _ai_docker_should_use_host_network codex-docker-build codex-docker-shell codex-auth-docker-run gemini-docker-build gemini-docker-shell claude-docker-build claude-docker-shell opencode-docker-build opencode-docker-shell docker-ai-build-all ai-docker ai-docker-deactivate
 }

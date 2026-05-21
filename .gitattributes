@@ -1,0 +1,11 @@
+# Normalize text files by default
+* text=auto
+
+# Keep shell and Docker build files LF so they run correctly in Linux containers.
+*.sh text eol=lf
+Dockerfile* text eol=lf
+scripts/* text eol=lf
+
+# Keep docs and PowerShell scripts consistent too.
+*.md text eol=lf
+*.ps1 text eol=lf
