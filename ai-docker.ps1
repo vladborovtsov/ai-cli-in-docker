@@ -104,12 +104,19 @@ function Edit-EnvFile {
 }
 
 function Get-WorkspaceItems {
+  param(
+    [int]$Width = 80
+  )
   $items = New-Object System.Collections.Generic.List[string]
   $paths = New-Object System.Collections.Generic.List[string]
 
+  $maxPathLen = $Width - 25
+  if ($maxPathLen -lt 15) { $maxPathLen = 15 }
+
   # 1. Current directory
   $launchDirResolved = _ai_docker_resolve_dir -Path $launchDir
-  [void]$items.Add("📍 Current Directory: $launchDirResolved")
+  $truncatedLaunchDir = Get-TruncatedPath -Path $launchDirResolved -MaxLength $maxPathLen
+  [void]$items.Add("📍 Current Directory: $truncatedLaunchDir")
   [void]$paths.Add($launchDirResolved)
 
   # 2. Custom path option
@@ -131,7 +138,8 @@ function Get-WorkspaceItems {
       }
       $resolved = _ai_docker_resolve_dir -Path $line
       if ($seen.Add($resolved) -and $resolved -ne $launchDirResolved) {
-        [void]$items.Add("🕒 Recent: $resolved")
+        $truncatedRecent = Get-TruncatedPath -Path $resolved -MaxLength $maxPathLen
+        [void]$items.Add("🕒 Recent: $truncatedRecent")
         [void]$paths.Add($resolved)
       }
     }
@@ -146,6 +154,24 @@ function Get-WorkspaceItems {
   }
 }
 
+function Get-TruncatedPath {
+  param(
+    [string]$Path,
+    [int]$MaxLength = 30
+  )
+  if ([string]::IsNullOrWhiteSpace($Path)) {
+    return ""
+  }
+  if ($Path.Length -le $MaxLength) {
+    return $Path
+  }
+  $half = [Math]::Floor(($MaxLength - 5) / 2)
+  if ($half -lt 5) { $half = 5 }
+  $start = $Path.Substring(0, $half)
+  $end = $Path.Substring($Path.Length - $half)
+  return "$start...$end"
+}
+
 function Render-Menu {
   param(
     [int]$selected
@@ -153,20 +179,32 @@ function Render-Menu {
 
   [Console]::Clear()
 
+  $cols = 80
+  try {
+    if ($Host.UI.RawUI -and $Host.UI.RawUI.WindowSize.Width -gt 10) {
+      $cols = $Host.UI.RawUI.WindowSize.Width
+    } elseif ([Console]::WindowWidth -gt 10) {
+      $cols = [Console]::WindowWidth
+    }
+  } catch {}
+
+  $insideWidth = 76
+  if ($cols -gt 10) {
+    $insideWidth = $cols - 4
+    if ($insideWidth -gt 76) { $insideWidth = 76 }
+    if ($insideWidth -lt 40) { $insideWidth = 40 }
+  }
+
   $mountPath = $script:AI_DOCKER_ACTIVE_WORKSPACE
   $baseDir = Split-Path -Leaf $mountPath
   if ([string]::IsNullOrWhiteSpace($baseDir) -or $baseDir -eq "." -or $baseDir -eq "/") {
     $baseDir = "project"
   }
-  $mountMapping = "(mounts: $mountPath -> /workspace/$baseDir)"
-
-  $insideWidth = 48 + $mountMapping.Length
-  if ($insideWidth -lt 80) { $insideWidth = 80 }
 
   $topBorder = "─" * $insideWidth
-  $titleText = "🤖 AI CLI IN DOCKER - CONTROL TUI"
-  $titleWidth = 33
-  $padding = $insideWidth - $titleWidth
+  $titleText = "AI CLI IN DOCKER - CONTROL TUI"
+  $padding = $insideWidth - $titleText.Length
+  if ($padding -lt 0) { $padding = 0 }
   $leftPad = [Math]::Floor($padding / 2)
   $rightPad = $padding - $leftPad
 
@@ -218,11 +256,34 @@ function Render-Menu {
           $statusColor = if ($status -eq "Built") { "Green" } else { "Red" }
 
           if ($isSelected) {
+            $prefixLen = 40 + $status.Length
+            $maxMappingLen = $cols - $prefixLen - 2
+            $truncatedBaseDir = if ($baseDir.Length -gt 15) { $baseDir.Substring(0, 12) + "..." } else { $baseDir }
+            $constantLen = 26 + $truncatedBaseDir.Length
+            $pathSpace = $maxMappingLen - $constantLen
+
+            if ($pathSpace -ge 12) {
+              $truncatedPath = Get-TruncatedPath -Path $mountPath -MaxLength $pathSpace
+              $itemMapping = " (mounts: $truncatedPath -> /workspace/$truncatedBaseDir)"
+            } else {
+              $maxMinimalLen = $maxMappingLen - 3
+              if ($maxMinimalLen -ge 10) {
+                $truncatedPath = Get-TruncatedPath -Path $mountPath -MaxLength $maxMinimalLen
+                $itemMapping = " [$truncatedPath]"
+              } else {
+                $itemMapping = ""
+              }
+            }
+
             Write-Host ("{0,-32}" -f $itemText) -ForegroundColor White -NoNewline
             Write-Host " [" -NoNewline
             Write-Host $status -ForegroundColor $statusColor -NoNewline
-            Write-Host "] " -NoNewline
-            Write-Host $mountMapping -ForegroundColor Gray
+            Write-Host "]" -ForegroundColor Gray -NoNewline
+            if ($itemMapping) {
+              Write-Host $itemMapping -ForegroundColor Gray
+            } else {
+              Write-Host ""
+            }
           } else {
             Write-Host ("{0,-32}" -f $itemText) -ForegroundColor Gray -NoNewline
             Write-Host " [" -NoNewline
@@ -290,7 +351,7 @@ function Render-Menu {
       Write-Host $script:AI_DOCKER_ACTIVE_WORKSPACE -ForegroundColor Green
       Write-Host ""
 
-      $workspaceMenu = Get-WorkspaceItems
+      $workspaceMenu = Get-WorkspaceItems -Width $cols
       $items = $workspaceMenu.Items
 
       for ($i = 0; $i -lt $items.Length; $i++) {
@@ -316,7 +377,15 @@ function Render-Menu {
   Write-Host ""
   $footerLine = "─" * ($insideWidth + 2)
   Write-Host $footerLine -ForegroundColor Cyan
-  Write-Host " [Use Up/Down Arrows or J/K to navigate, Enter to select, Q/Esc to go back/exit]" -ForegroundColor Gray
+
+  $helpText = " [Use Up/Down Arrows or J/K to navigate, Enter to select, Q/Esc to go back/exit]"
+  if ($cols -lt 82) {
+    $helpText = " [Arrows/Vim to navigate, Enter to select, Q/Esc to exit]"
+    if ($cols -lt 60) {
+      $helpText = " [Arrows/Enter/Q]"
+    }
+  }
+  Write-Host $helpText -ForegroundColor Gray
 }
 
 function Move-Selection {
@@ -588,57 +657,61 @@ while ($true) {
       break
     }
   } elseif ($key -match '^[0-9]$') {
+    $shouldBreak = $false
     if ($script:current_menu -eq "main") {
       switch ($key) {
-        '1' { $script:selected_index = 0; if (Handle-Select) { break } }
-        '2' { $script:selected_index = 1; if (Handle-Select) { break } }
-        '3' { $script:selected_index = 2; if (Handle-Select) { break } }
-        '4' { $script:selected_index = 3; if (Handle-Select) { break } }
-        '5' { $script:selected_index = 4; if (Handle-Select) { break } }
-        '6' { $script:selected_index = 6; if (Handle-Select) { break } }
-        '7' { $script:selected_index = 7; if (Handle-Select) { break } }
-        '8' { $script:selected_index = 8; if (Handle-Select) { break } }
-        '0' { $script:selected_index = 9; if (Handle-Select) { break } }
+        '1' { $script:selected_index = 0; if (Handle-Select) { $shouldBreak = $true } }
+        '2' { $script:selected_index = 1; if (Handle-Select) { $shouldBreak = $true } }
+        '3' { $script:selected_index = 2; if (Handle-Select) { $shouldBreak = $true } }
+        '4' { $script:selected_index = 3; if (Handle-Select) { $shouldBreak = $true } }
+        '5' { $script:selected_index = 4; if (Handle-Select) { $shouldBreak = $true } }
+        '6' { $script:selected_index = 6; if (Handle-Select) { $shouldBreak = $true } }
+        '7' { $script:selected_index = 7; if (Handle-Select) { $shouldBreak = $true } }
+        '8' { $script:selected_index = 8; if (Handle-Select) { $shouldBreak = $true } }
+        '0' { $script:selected_index = 9; if (Handle-Select) { $shouldBreak = $true } }
       }
     } elseif ($script:current_menu -eq "build") {
       switch ($key) {
-        '1' { $script:selected_index = 0; if (Handle-Select) { break } }
-        '2' { $script:selected_index = 1; if (Handle-Select) { break } }
-        '3' { $script:selected_index = 2; if (Handle-Select) { break } }
-        '4' { $script:selected_index = 3; if (Handle-Select) { break } }
-        '5' { $script:selected_index = 4; if (Handle-Select) { break } }
-        '0' { $script:selected_index = 5; if (Handle-Select) { break } }
+        '1' { $script:selected_index = 0; if (Handle-Select) { $shouldBreak = $true } }
+        '2' { $script:selected_index = 1; if (Handle-Select) { $shouldBreak = $true } }
+        '3' { $script:selected_index = 2; if (Handle-Select) { $shouldBreak = $true } }
+        '4' { $script:selected_index = 3; if (Handle-Select) { $shouldBreak = $true } }
+        '5' { $script:selected_index = 4; if (Handle-Select) { $shouldBreak = $true } }
+        '0' { $script:selected_index = 5; if (Handle-Select) { $shouldBreak = $true } }
       }
     } elseif ($script:current_menu -eq "config") {
       switch ($key) {
-        '1' { $script:selected_index = 0; if (Handle-Select) { break } }
-        '2' { $script:selected_index = 1; if (Handle-Select) { break } }
-        '3' { $script:selected_index = 2; if (Handle-Select) { break } }
-        '4' { $script:selected_index = 3; if (Handle-Select) { break } }
-        '0' { $script:selected_index = 4; if (Handle-Select) { break } }
+        '1' { $script:selected_index = 0; if (Handle-Select) { $shouldBreak = $true } }
+        '2' { $script:selected_index = 1; if (Handle-Select) { $shouldBreak = $true } }
+        '3' { $script:selected_index = 2; if (Handle-Select) { $shouldBreak = $true } }
+        '4' { $script:selected_index = 3; if (Handle-Select) { $shouldBreak = $true } }
+        '0' { $script:selected_index = 4; if (Handle-Select) { $shouldBreak = $true } }
       }
     } elseif ($script:current_menu -eq "cleanup") {
       switch ($key) {
-        '1' { $script:selected_index = 0; if (Handle-Select) { break } }
-        '2' { $script:selected_index = 1; if (Handle-Select) { break } }
-        '3' { $script:selected_index = 2; if (Handle-Select) { break } }
-        '0' { $script:selected_index = 3; if (Handle-Select) { break } }
+        '1' { $script:selected_index = 0; if (Handle-Select) { $shouldBreak = $true } }
+        '2' { $script:selected_index = 1; if (Handle-Select) { $shouldBreak = $true } }
+        '3' { $script:selected_index = 2; if (Handle-Select) { $shouldBreak = $true } }
+        '0' { $script:selected_index = 3; if (Handle-Select) { $shouldBreak = $true } }
       }
     } elseif ($script:current_menu -eq "workspace") {
       $workspaceMenu = Get-WorkspaceItems
       $items = $workspaceMenu.Items
       if ($key -eq '1') {
-        $script:selected_index = 0; if (Handle-Select) { break }
+        $script:selected_index = 0; if (Handle-Select) { $shouldBreak = $true }
       } elseif ($key -eq '2') {
-        $script:selected_index = 1; if (Handle-Select) { break }
+        $script:selected_index = 1; if (Handle-Select) { $shouldBreak = $true }
       } elseif ($key -eq '0') {
-        $script:selected_index = $items.Length - 1; if (Handle-Select) { break }
+        $script:selected_index = $items.Length - 1; if (Handle-Select) { $shouldBreak = $true }
       } else {
         $digitVal = [int][string]$key
         if ($digitVal -lt $items.Length - 1 -and $items[$digitVal] -notmatch '──') {
-          $script:selected_index = $digitVal; if (Handle-Select) { break }
+          $script:selected_index = $digitVal; if (Handle-Select) { $shouldBreak = $true }
         }
       }
+    }
+    if ($shouldBreak) {
+      break
     }
   }
 }
