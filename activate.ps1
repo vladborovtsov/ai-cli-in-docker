@@ -1,4 +1,4 @@
-# Dot-source this file to add AI Docker helpers to your PowerShell session.
+﻿# Dot-source this file to add AI Docker helpers to your PowerShell session.
 # Usage:
 #   . .\activate.ps1
 #   codex-docker-build
