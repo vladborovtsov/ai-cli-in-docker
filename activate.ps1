@@ -62,13 +62,21 @@ function _ai_docker_ensure_file {
 }
 
 function _ai_docker_migrate_legacy {
+  $oldIgnoreDir = Join-Path $HOME ".ai-docker-ignore"
+  $newProfilesDir = Join-Path $HOME ".ai-docker-profiles"
+  if (Test-Path -LiteralPath $oldIgnoreDir -PathType Container) {
+    if (-not (Test-Path -LiteralPath $newProfilesDir -PathType Container)) {
+      Move-Item -LiteralPath $oldIgnoreDir -Destination $newProfilesDir -Force -ErrorAction SilentlyContinue
+    }
+  }
+
   $legacyCodex = Join-Path $HOME ".codex-docker-config"
   $legacyGemini = Join-Path $HOME ".gemini-cli-docker-config"
   $legacyClaude = Join-Path $HOME ".claude-docker-config"
   $legacyOpencode = Join-Path $HOME ".opencode-docker"
   $legacyRecents = Join-Path $HOME ".ai-docker-recents"
 
-  $targetDir = Join-Path (Join-Path $HOME ".ai-docker-ignore") "default"
+  $targetDir = Join-Path (Join-Path $HOME ".ai-docker-profiles") "default"
 
   # Helper to migrate directory
   function _ai_docker_migrate_dir {
@@ -110,7 +118,7 @@ function _ai_docker_migrate_legacy {
 
 function _ai_docker_get_project_profile {
   param([string]$TargetPath)
-  $mapFile = Join-Path (Join-Path $HOME ".ai-docker-ignore") "project-profiles"
+  $mapFile = Join-Path (Join-Path $HOME ".ai-docker-profiles") "project-profiles"
   if (Test-Path -LiteralPath $mapFile -PathType Leaf) {
     $resolvedTarget = _ai_docker_resolve_dir -Path $TargetPath
     $lines = Get-Content -LiteralPath $mapFile -ErrorAction SilentlyContinue
@@ -135,7 +143,7 @@ function _ai_docker_get_project_profile {
 
 function _ai_docker_set_project_profile {
   param([string]$TargetPath, [string]$ProfileName)
-  $mapFile = Join-Path (Join-Path $HOME ".ai-docker-ignore") "project-profiles"
+  $mapFile = Join-Path (Join-Path $HOME ".ai-docker-profiles") "project-profiles"
   _ai_docker_ensure_dir -Path (Split-Path -Parent $mapFile)
 
   $resolvedTarget = _ai_docker_resolve_dir -Path $TargetPath
@@ -223,7 +231,7 @@ function _ai_docker_load_profile {
 
   $script:AI_DOCKER_PROFILE = if ([string]::IsNullOrWhiteSpace($script:AI_DOCKER_PROFILE)) { "default" } else { $script:AI_DOCKER_PROFILE }
 
-  $profileDir = Join-Path (Join-Path $HOME ".ai-docker-ignore") $script:AI_DOCKER_PROFILE
+  $profileDir = Join-Path (Join-Path $HOME ".ai-docker-profiles") $script:AI_DOCKER_PROFILE
   $script:CODEX_CONFIG_PATH = Join-Path $profileDir "codex-docker-config"
   $script:GEMINI_CONFIG_PATH = Join-Path $profileDir "gemini-cli-docker-config"
   $script:CLAUDE_CONFIG_PATH = Join-Path $profileDir "claude-docker-config"
@@ -255,13 +263,11 @@ function ai-docker-profile {
     Write-Host "Current profile: $($script:AI_DOCKER_PROFILE)"
     Write-Host "Available profiles:"
     Write-Host "  default"
-    Write-Host "  personal"
-    Write-Host "  work"
-    $ignoreDir = Join-Path $HOME ".ai-docker-ignore"
+    $ignoreDir = Join-Path $HOME ".ai-docker-profiles"
     if (Test-Path -LiteralPath $ignoreDir -PathType Container) {
       Get-ChildItem -LiteralPath $ignoreDir -Directory -ErrorAction SilentlyContinue | ForEach-Object {
         $name = $_.Name
-        if ($name -ne "default" -and $name -ne "personal" -and $name -ne "work" -and $name -ne "project-profiles") {
+        if ($name -ne "default" -and $name -ne "project-profiles") {
           Write-Host "  $name"
         }
       }

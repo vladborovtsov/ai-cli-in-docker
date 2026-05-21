@@ -130,24 +130,24 @@ Reload profile:
 - PowerShell: `. $PROFILE`
 
 ### Profiles and Configuration Storage
-The CLI supports multiple isolated profiles (e.g., `personal`, `work`, and `default`). Each profile isolates auth, configs, recent workspace paths, and environment files under:
-`~/.ai-docker-ignore/<profile-name>/`
+The CLI supports multiple isolated profiles. Only `default` is pre-defined, but you can create additional profiles (e.g., `personal`, `work`). Each profile isolates auth, configs, recent workspace paths, and environment files under:
+`~/.ai-docker-profiles/<profile-name>/`
 
 Specifically, for the active profile:
 - **Codex**:
-  - Host: `~/.ai-docker-ignore/<profile>/codex-docker-config`
+  - Host: `~/.ai-docker-profiles/<profile>/codex-docker-config`
   - Container: `/root/.codex`
 - **Gemini**:
-  - Host: `~/.ai-docker-ignore/<profile>/gemini-cli-docker-config`
+  - Host: `~/.ai-docker-profiles/<profile>/gemini-cli-docker-config`
   - Container: `/root/.gemini`
 - **Claude**:
-  - Host: `~/.ai-docker-ignore/<profile>/claude-docker-config`
+  - Host: `~/.ai-docker-profiles/<profile>/claude-docker-config`
   - Container: `/root/.claude`
   - `/root/.claude.json` is symlinked to `/root/.claude/claude.json`
 - **OpenCode**:
-  - Host: `~/.ai-docker-ignore/<profile>/opencode-docker/local` -> Container: `/root/.local`
-  - Host: `~/.ai-docker-ignore/<profile>/opencode-docker/config` -> Container: `/root/.config/opencode`
-  - Host: `~/.ai-docker-ignore/<profile>/opencode-docker/docker-env.env` -> Container environment variables
+  - Host: `~/.ai-docker-profiles/<profile>/opencode-docker/local` -> Container: `/root/.local`
+  - Host: `~/.ai-docker-profiles/<profile>/opencode-docker/config` -> Container: `/root/.config/opencode`
+  - Host: `~/.ai-docker-profiles/<profile>/opencode-docker/docker-env.env` -> Container environment variables
 
 Each host config directory includes a `docker-env.env` file that is passed to the container.
 
@@ -162,7 +162,7 @@ Each host config directory includes a `docker-env.env` file that is passed to th
 ### Passing environment variables
 Add environment variables to the tool's `docker-env.env` file.
 
-Example for Claude (`~/.claude-docker-config/docker-env.env`):
+Example for Claude (`~/.ai-docker-profiles/<profile>/claude-docker-config/docker-env.env`):
 ```env
 ANTHROPIC_BASE_URL=http://host.docker.internal:1234
 ANTHROPIC_AUTH_TOKEN=lm

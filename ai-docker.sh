@@ -231,10 +231,10 @@ load_profile_menu() {
   profile_items=()
   profile_names=()
 
-  # Always include default, personal, and work
-  profile_names+=("default" "personal" "work")
+  # Always include default
+  profile_names+=("default")
 
-  local ignore_dir="$HOME/.ai-docker-ignore"
+  local ignore_dir="$HOME/.ai-docker-profiles"
   if [ -d "$ignore_dir" ]; then
     for d in "$ignore_dir"/*; do
       if [ -d "$d" ]; then
@@ -784,8 +784,8 @@ handle_select() {
           if [ -n "$new_name" ]; then
             new_name=$(echo "$new_name" | tr -cd 'a-zA-Z0-9_-')
             if [ -n "$new_name" ] && [ "$new_name" != "default" ]; then
-              local old_dir="$HOME/.ai-docker-ignore/$selected_profile_name"
-              local new_dir="$HOME/.ai-docker-ignore/$new_name"
+              local old_dir="$HOME/.ai-docker-profiles/$selected_profile_name"
+              local new_dir="$HOME/.ai-docker-profiles/$new_name"
               if [ -d "$old_dir" ]; then
                 if [ -d "$new_dir" ]; then
                   echo -e "${RED}Error: Profile '$new_name' already exists.${RESET}"
@@ -796,7 +796,7 @@ handle_select() {
                     echo "$new_name" > "$HOME/.ai-docker-active-profile"
                   fi
                   # Update mapping file
-                  local map_file="$HOME/.ai-docker-ignore/project-profiles"
+                  local map_file="$HOME/.ai-docker-profiles/project-profiles"
                   if [ -f "$map_file" ]; then
                     local tmp_map="${map_file}.tmp"
                     while IFS= read -r line || [ -n "$line" ]; do
@@ -825,7 +825,7 @@ handle_select() {
                   echo "$new_name" > "$HOME/.ai-docker-active-profile"
                 fi
                 # Update mapping file
-                local map_file="$HOME/.ai-docker-ignore/project-profiles"
+                local map_file="$HOME/.ai-docker-profiles/project-profiles"
                 if [ -f "$map_file" ]; then
                   local tmp_map="${map_file}.tmp"
                   while IFS= read -r line || [ -n "$line" ]; do
@@ -870,14 +870,14 @@ handle_select() {
           echo ""
           read -rp "Type 'yes' to confirm: " confirm
           if [ "$confirm" = "yes" ]; then
-            local old_dir="$HOME/.ai-docker-ignore/$selected_profile_name"
+            local old_dir="$HOME/.ai-docker-profiles/$selected_profile_name"
             if [ -d "$old_dir" ]; then
               rm -rf "$old_dir"
             fi
             if [ "${AI_DOCKER_PROFILE:-default}" = "$selected_profile_name" ]; then
               echo "default" > "$HOME/.ai-docker-active-profile"
             fi
-            local map_file="$HOME/.ai-docker-ignore/project-profiles"
+            local map_file="$HOME/.ai-docker-profiles/project-profiles"
             if [ -f "$map_file" ]; then
               local tmp_map="${map_file}.tmp"
               while IFS= read -r line || [ -n "$line" ]; do

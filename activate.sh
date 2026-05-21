@@ -21,13 +21,19 @@ if [ -n "${AI_DOCKER_PROFILE-}" ] && [ -z "${AI_DOCKER_PROFILE_ENV_OVERRIDE-}" ]
 fi
 
 _ai_docker_migrate_legacy() {
+  local old_ignore_dir="$HOME/.ai-docker-ignore"
+  local new_profiles_dir="$HOME/.ai-docker-profiles"
+  if [ -d "$old_ignore_dir" ] && [ ! -d "$new_profiles_dir" ]; then
+    mv "$old_ignore_dir" "$new_profiles_dir"
+  fi
+
   local legacy_codex="$HOME/.codex-docker-config"
   local legacy_gemini="$HOME/.gemini-cli-docker-config"
   local legacy_claude="$HOME/.claude-docker-config"
   local legacy_opencode="$HOME/.opencode-docker"
   local legacy_recents="$HOME/.ai-docker-recents"
 
-  local target_dir="$HOME/.ai-docker-ignore/default"
+  local target_dir="$HOME/.ai-docker-profiles/default"
 
   # Helper to migrate directory
   migrate_dir() {
@@ -72,7 +78,7 @@ _ai_docker_migrate_legacy() {
 
 _ai_docker_get_project_profile() {
   local target_path="$1"
-  local map_file="$HOME/.ai-docker-ignore/project-profiles"
+  local map_file="$HOME/.ai-docker-profiles/project-profiles"
   if [ -f "$map_file" ]; then
     local resolved_target
     resolved_target=$(cd "$target_path" 2>/dev/null && pwd || echo "$target_path")
@@ -93,7 +99,7 @@ _ai_docker_get_project_profile() {
 _ai_docker_set_project_profile() {
   local target_path="$1"
   local profile_name="$2"
-  local map_file="$HOME/.ai-docker-ignore/project-profiles"
+  local map_file="$HOME/.ai-docker-profiles/project-profiles"
   mkdir -p "$(dirname "$map_file")"
   
   local resolved_target
@@ -168,7 +174,7 @@ _ai_docker_load_profile() {
 
   AI_DOCKER_PROFILE="${AI_DOCKER_PROFILE:-default}"
 
-  local profile_dir="$HOME/.ai-docker-ignore/$AI_DOCKER_PROFILE"
+  local profile_dir="$HOME/.ai-docker-profiles/$AI_DOCKER_PROFILE"
   CODEX_CONFIG_PATH="$profile_dir/codex-docker-config"
   GEMINI_CONFIG_PATH="$profile_dir/gemini-cli-docker-config"
   CLAUDE_CONFIG_PATH="$profile_dir/claude-docker-config"
@@ -198,15 +204,13 @@ ai-docker-profile() {
     echo "Current profile: ${AI_DOCKER_PROFILE:-default}"
     echo "Available profiles:"
     echo "  default"
-    echo "  personal"
-    echo "  work"
-    local ignore_dir="$HOME/.ai-docker-ignore"
+    local ignore_dir="$HOME/.ai-docker-profiles"
     if [ -d "$ignore_dir" ]; then
       for d in "$ignore_dir"/*; do
         if [ -d "$d" ]; then
           local name
           name=$(basename "$d")
-          if [ "$name" != "default" ] && [ "$name" != "personal" ] && [ "$name" != "work" ] && [ "$name" != "project-profiles" ]; then
+          if [ "$name" != "default" ] && [ "$name" != "project-profiles" ]; then
             echo "  $name"
           fi
         fi

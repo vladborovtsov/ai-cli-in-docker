@@ -84,10 +84,8 @@ function Get-MainItems {
 function Get-ProfileItems {
   $names = New-Object System.Collections.Generic.List[string]
   [void]$names.Add("default")
-  [void]$names.Add("personal")
-  [void]$names.Add("work")
 
-  $ignoreDir = Join-Path $HOME ".ai-docker-ignore"
+  $ignoreDir = Join-Path $HOME ".ai-docker-profiles"
   if (Test-Path -LiteralPath $ignoreDir -PathType Container) {
     foreach ($d in Get-ChildItem -LiteralPath $ignoreDir -Directory -ErrorAction SilentlyContinue) {
       $name = $d.Name
@@ -757,8 +755,8 @@ function Handle-Select {
           if (-not [string]::IsNullOrWhiteSpace($newName)) {
             $newName = $newName -replace '[^a-zA-Z0-9_-]', ''
             if (-not [string]::IsNullOrWhiteSpace($newName) -and $newName -ne "default") {
-              $oldDir = Join-Path (Join-Path $HOME ".ai-docker-ignore") $script:selected_profile_name
-              $newDir = Join-Path (Join-Path $HOME ".ai-docker-ignore") $newName
+              $oldDir = Join-Path (Join-Path $HOME ".ai-docker-profiles") $script:selected_profile_name
+              $newDir = Join-Path (Join-Path $HOME ".ai-docker-profiles") $newName
               if (Test-Path -LiteralPath $oldDir -PathType Container) {
                 if (Test-Path -LiteralPath $newDir -PathType Container) {
                   Write-Host "Error: Profile '$newName' already exists." -ForegroundColor Red
@@ -771,7 +769,7 @@ function Handle-Select {
                     $newName | Out-File -LiteralPath $activeProfileFile -Force -NoNewline -Encoding utf8
                   }
                   # Update mapping file
-                  $mapFile = Join-Path (Join-Path $HOME ".ai-docker-ignore") "project-profiles"
+                  $mapFile = Join-Path (Join-Path $HOME ".ai-docker-profiles") "project-profiles"
                   if (Test-Path -LiteralPath $mapFile -PathType Leaf) {
                     $tmpMap = "$mapFile.tmp"
                     $lines = Get-Content -LiteralPath $mapFile -ErrorAction SilentlyContinue
@@ -814,7 +812,7 @@ function Handle-Select {
                   $newName | Out-File -LiteralPath $activeProfileFile -Force -NoNewline -Encoding utf8
                 }
                 # Update mapping file
-                $mapFile = Join-Path (Join-Path $HOME ".ai-docker-ignore") "project-profiles"
+                $mapFile = Join-Path (Join-Path $HOME ".ai-docker-profiles") "project-profiles"
                 if (Test-Path -LiteralPath $mapFile -PathType Leaf) {
                   $tmpMap = "$mapFile.tmp"
                   $lines = Get-Content -LiteralPath $mapFile -ErrorAction SilentlyContinue
@@ -868,7 +866,7 @@ function Handle-Select {
           Write-Host ""
           $confirm = Read-Host "Type 'yes' to confirm"
           if ($confirm -eq "yes") {
-            $oldDir = Join-Path (Join-Path $HOME ".ai-docker-ignore") $script:selected_profile_name
+            $oldDir = Join-Path (Join-Path $HOME ".ai-docker-profiles") $script:selected_profile_name
             if (Test-Path -LiteralPath $oldDir -PathType Container) {
               Remove-Item -Path $oldDir -Recurse -Force -ErrorAction SilentlyContinue
             }
@@ -878,7 +876,7 @@ function Handle-Select {
               "default" | Out-File -LiteralPath $activeProfileFile -Force -NoNewline -Encoding utf8
             }
             # Update mapping file
-            $mapFile = Join-Path (Join-Path $HOME ".ai-docker-ignore") "project-profiles"
+            $mapFile = Join-Path (Join-Path $HOME ".ai-docker-profiles") "project-profiles"
             if (Test-Path -LiteralPath $mapFile -PathType Leaf) {
               $tmpMap = "$mapFile.tmp"
               $lines = Get-Content -LiteralPath $mapFile -ErrorAction SilentlyContinue
