@@ -38,10 +38,11 @@ export LANG="${LANG:-C.UTF-8}"
 export TMUX_TMPDIR="${TMUX_TMPDIR:-/tmp}"
 
 # Allow longer session name in tmux status bar (status-left)
-STATUS_LEFT_LENGTH="${TMUX_STATUS_LEFT_LENGTH:-32}"
+STATUS_LEFT_LENGTH="${TMUX_STATUS_LEFT_LENGTH:-60}"
 STATUS_RIGHT_LENGTH="${TMUX_STATUS_RIGHT_LENGTH:-64}"
-# Status-left content: show session name in yellow; most text uses default light gray
-TMUX_STATUS_LEFT="${TMUX_STATUS_LEFT:-#[fg=yellow] #S #[fg=default]}"
+# Status-left content: show session name in yellow, active profile in light blue, brackets in dark gray
+profile_name="${AI_DOCKER_PROFILE:-default}"
+TMUX_STATUS_LEFT="${TMUX_STATUS_LEFT:-#[fg=yellow] #S #[fg=colour244](#[fg=colour81]${profile_name}#[fg=colour244]) #[fg=default]}"
 # Status-right content: show time and date
 TMUX_STATUS_RIGHT="${TMUX_STATUS_RIGHT:-#[fg=default] %Y-%m-%d %H:%M #[fg=yellow]#H }"
 

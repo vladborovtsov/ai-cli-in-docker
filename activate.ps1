@@ -642,6 +642,7 @@ function codex-docker-shell {
   $envVars = @{
     TERM = $(if ($env:TERM) { $env:TERM } else { 'xterm-256color' })
     TMUX_SESSION = $workspaceLeaf
+    AI_DOCKER_PROFILE = $script:AI_DOCKER_PROFILE
     AI_NAME = 'codex'
     AI_COMMAND = 'codex'
   }
@@ -714,6 +715,7 @@ function gemini-docker-shell {
   $envVars = @{
     TERM = $(if ($env:TERM) { $env:TERM } else { 'xterm-256color' })
     TMUX_SESSION = $workspaceLeaf
+    AI_DOCKER_PROFILE = $script:AI_DOCKER_PROFILE
     AI_NAME = 'gemini'
     AI_COMMAND = 'gemini'
   }
@@ -751,6 +753,7 @@ function claude-docker-shell {
   $envVars = @{
     TERM = $(if ($env:TERM) { $env:TERM } else { 'xterm-256color' })
     TMUX_SESSION = $workspaceLeaf
+    AI_DOCKER_PROFILE = $script:AI_DOCKER_PROFILE
     AI_NAME = 'claude'
     AI_COMMAND = 'claude'
   }
@@ -788,6 +791,7 @@ function opencode-docker-shell {
   $envVars = @{
     TERM = $(if ($env:TERM) { $env:TERM } else { 'xterm-256color' })
     TMUX_SESSION = $workspaceLeaf
+    AI_DOCKER_PROFILE = $script:AI_DOCKER_PROFILE
     AI_NAME = 'opencode'
     AI_COMMAND = 'opencode'
     PATH = '/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin'

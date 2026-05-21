@@ -464,6 +464,7 @@ codex-docker-shell() {
     -e "TZ=${tz_value}"
     -e "TERM=${TERM:-xterm-256color}"
     -e "TMUX_SESSION=${workspace_name}"
+    -e "AI_DOCKER_PROFILE=${AI_DOCKER_PROFILE}"
     -e AI_NAME=codex
     -e AI_COMMAND=codex
     "$CODEX_IMAGE_NAME"
@@ -617,6 +618,7 @@ gemini-docker-shell() {
     -e "TZ=${tz_value}"
     -e "TERM=${TERM:-xterm-256color}"
     -e "TMUX_SESSION=${workspace_name}"
+    -e "AI_DOCKER_PROFILE=${AI_DOCKER_PROFILE}"
     -e AI_NAME=gemini
     -e AI_COMMAND=gemini
     "$GEMINI_IMAGE_NAME"
@@ -717,6 +719,7 @@ claude-docker-shell() {
     -e "TZ=${tz_value}"
     -e "TERM=${TERM:-xterm-256color}"
     -e "TMUX_SESSION=${workspace_name}"
+    -e "AI_DOCKER_PROFILE=${AI_DOCKER_PROFILE}"
     -e AI_NAME=claude
     -e AI_COMMAND=claude
     "$CLAUDE_IMAGE_NAME"
@@ -825,6 +828,7 @@ opencode-docker-shell() {
     -e "TZ=${tz_value}"
     -e "TERM=${TERM:-xterm-256color}"
     -e "TMUX_SESSION=${workspace_name}"
+    -e "AI_DOCKER_PROFILE=${AI_DOCKER_PROFILE}"
     -e AI_NAME=opencode
     -e AI_COMMAND=opencode
     -e PATH=/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin
