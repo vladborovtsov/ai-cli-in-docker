@@ -97,9 +97,9 @@ More tmux docs:
 - `man tmux`
 
 ### Make more room for the session name in tmux status bar
-By default, tmux truncates the left status text. This setup increases it to 32 characters.
-- One-off run: `TMUX_STATUS_LEFT_LENGTH=50 gemini-docker-shell`
-- Persist for current shell session: `export TMUX_STATUS_LEFT_LENGTH=50`
+By default, tmux truncates the left status text. This setup increases the default status-left length to 60 characters and displays the active profile alongside the session name (e.g. `workspace (default)`).
+- One-off run: `TMUX_STATUS_LEFT_LENGTH=80 gemini-docker-shell`
+- Persist for current shell session: `export TMUX_STATUS_LEFT_LENGTH=80`
 
 ### Persist activation in shell profile
 Add activation to your shell profile so helpers are available in new terminals.
