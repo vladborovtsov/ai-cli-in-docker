@@ -78,3 +78,5 @@ docker/**/tmp/
 *.tar
 *.tar.gz
 *.rar
+scratch/
+

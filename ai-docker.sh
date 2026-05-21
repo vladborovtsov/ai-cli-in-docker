@@ -30,6 +30,27 @@ get_mount_path() {
   builtin echo "${active_mount_path}"
 }
 
+activate_workspace() {
+  local target_path="$1"
+  if [ -z "$target_path" ] || [ ! -d "$target_path" ]; then
+    return 1
+  fi
+  active_mount_path=$(cd "$target_path" 2>/dev/null && pwd || echo "$target_path")
+  
+  if [ "$active_mount_path" != "$HOME" ]; then
+    local mapped
+    mapped=$(_ai_docker_get_project_profile "$active_mount_path")
+    if [ -n "$mapped" ]; then
+      echo "$mapped" > "$HOME/.ai-docker-active-profile"
+      _ai_docker_load_profile "$mapped" "$active_mount_path"
+    else
+      local active="${AI_DOCKER_PROFILE:-default}"
+      _ai_docker_set_project_profile "$active_mount_path" "$active"
+      _ai_docker_load_profile "$active" "$active_mount_path"
+    fi
+  fi
+}
+
 # Helper to repeat a character N times
 repeat_char() {
   local char="$1"
@@ -51,13 +72,20 @@ check_image_built() {
 
 # State variables
 LAUNCH_DIR=$(pwd)
-RECENTS_FILE="$HOME/.ai-docker-recents"
+RECENTS_FILE="${AI_DOCKER_RECENTS_FILE:-$HOME/.ai-docker-recents}"
 active_mount_path=$(cd "$LAUNCH_DIR" 2>/dev/null && pwd || echo "$LAUNCH_DIR")
 
 current_menu="main"
 selected_index=0
 menu_lines=0
 force_clear=1
+selected_profile_name=""
+profile_action_items=(
+  "👉 Activate Profile"
+  "✏️  Rename Profile"
+  "🗑️  Delete Profile"
+  "⬅️  Back to Profile List"
+)
 
 # Image status caching variables
 claude_built=""
@@ -132,13 +160,20 @@ workspace_items=()
 workspace_paths=()
 
 load_workspace_menu() {
+  RECENTS_FILE="${AI_DOCKER_RECENTS_FILE:-$HOME/.ai-docker-recents}"
   workspace_items=()
   workspace_paths=()
 
   # 1. Current directory
   local launch_dir
   launch_dir=$(cd "$LAUNCH_DIR" 2>/dev/null && pwd || builtin echo "$LAUNCH_DIR")
-  workspace_items+=("📍 Current Directory: $launch_dir")
+  local launch_profile=""
+  if [ "$launch_dir" != "$HOME" ]; then
+    local p_prof
+    p_prof=$(_ai_docker_get_project_profile "$launch_dir")
+    launch_profile=" (profile: ${p_prof:-default})"
+  fi
+  workspace_items+=("📍 Current Directory: ${launch_dir}${launch_profile}")
   workspace_paths+=("$launch_dir")
 
   # 2. Custom path option
@@ -154,9 +189,14 @@ load_workspace_menu() {
       if [ -n "$dir" ] && [ -d "$dir" ]; then
         local resolved
         resolved=$(cd "$dir" 2>/dev/null && pwd || builtin echo "$dir")
-        # Don't add current directory to recents list in the menu (it's already option 1)
         if [ "$resolved" != "$launch_dir" ]; then
-          workspace_items+=("🕒 Recent: $resolved")
+          local r_profile=""
+          if [ "$resolved" != "$HOME" ]; then
+            local p_prof
+            p_prof=$(_ai_docker_get_project_profile "$resolved")
+            r_profile=" (profile: ${p_prof:-default})"
+          fi
+          workspace_items+=("🕒 Recent: ${resolved}${r_profile}")
           workspace_paths+=("$resolved")
         fi
       fi
@@ -168,18 +208,69 @@ load_workspace_menu() {
 }
 
 # Menu definition lists
-main_items=(
-  "💬 Launch Claude Code"
-  "💬 Launch Gemini CLI"
-  "💬 Launch OpenAI Codex"
-  "💬 Launch OpenCode"
-  "📁 Change Workspace Directory..."
-  "──────────────────────────────────────────────────"
-  "🛠️  Rebuild/Update Images..."
-  "⚙️  Edit Environment Files..."
-  "🧹 Clean up Docker Space..."
-  "🚪 Exit"
-)
+load_main_menu() {
+  main_items=(
+    "💬 Launch Claude Code"
+    "💬 Launch Gemini CLI"
+    "💬 Launch OpenAI Codex"
+    "💬 Launch OpenCode"
+    "📁 Change Workspace Directory..."
+    "👤 Switch Active Profile (Current: ${AI_DOCKER_PROFILE:-default})"
+    "──────────────────────────────────────────────────"
+    "🛠️  Rebuild/Update Images..."
+    "⚙️  Edit Environment Files..."
+    "🧹 Clean up Docker Space..."
+    "🚪 Exit"
+  )
+}
+
+profile_items=()
+profile_names=()
+
+load_profile_menu() {
+  profile_items=()
+  profile_names=()
+
+  # Always include default, personal, and work
+  profile_names+=("default" "personal" "work")
+
+  local ignore_dir="$HOME/.ai-docker-ignore"
+  if [ -d "$ignore_dir" ]; then
+    for d in "$ignore_dir"/*; do
+      if [ -d "$d" ]; then
+        local name
+        name=$(basename "$d")
+        local found=0
+        for existing in "${profile_names[@]}"; do
+          if [ "$existing" = "$name" ]; then
+            found=1
+            break
+          fi
+        done
+        if [ "$found" -eq 0 ]; then
+          profile_names+=("$name")
+        fi
+      fi
+    done
+  fi
+
+  for name in "${profile_names[@]}"; do
+    if [ "$name" = "${AI_DOCKER_PROFILE:-default}" ]; then
+      profile_items+=("👤 $name (Active)")
+    else
+      profile_items+=("👤 $name")
+    fi
+  done
+
+  profile_items+=("──────────────────────────────────────────────────")
+  profile_names+=("DIVIDER")
+
+  profile_items+=("➕ Create New Profile...")
+  profile_names+=("CREATE")
+
+  profile_items+=("⬅️ Back to Main Menu")
+  profile_names+=("BACK")
+}
 
 build_items=(
   "📦 Claude Code (Dockerfile.claude)"
@@ -208,7 +299,9 @@ cleanup_items=(
 # Helper to get the length of the active menu
 get_menu_length() {
   case "$current_menu" in
-    main) echo "${#main_items[@]}" ;;
+    main) load_main_menu; echo "${#main_items[@]}" ;;
+    profile) load_profile_menu; echo "${#profile_items[@]}" ;;
+    profile_actions) echo "${#profile_action_items[@]}" ;;
     build) echo "${#build_items[@]}" ;;
     config) echo "${#config_items[@]}" ;;
     cleanup) echo "${#cleanup_items[@]}" ;;
@@ -258,6 +351,7 @@ render_menu() {
 
   case "$current_menu" in
     main)
+      load_main_menu
       echo -e "  ${BOLD}Select an action to launch or manage:${RESET}"
       echo ""
       lines_printed=$((lines_printed + 2))
@@ -267,6 +361,7 @@ render_menu() {
         "[$gemini_built]"
         "[$codex_built]"
         "[$opencode_built]"
+        ""
         ""
         ""
         ""
@@ -300,6 +395,37 @@ render_menu() {
             else
               printf "    %s\n" "$item_text"
             fi
+          fi
+        fi
+        lines_printed=$((lines_printed + 1))
+      done
+      ;;
+
+    profile)
+      echo -e "  ${BOLD}Select or change the active profile:${RESET}"
+      echo -e "  Current profile: ${GREEN}${AI_DOCKER_PROFILE:-default}${RESET}"
+      echo ""
+      lines_printed=$((lines_printed + 3))
+
+      load_profile_menu
+
+      for i in "${!profile_items[@]}"; do
+        local item_text="${profile_items[$i]}"
+        if [ "$i" -eq "$selected" ]; then
+          if [[ "$item_text" == ──* ]]; then
+            local div_width=$((inside_width - 4))
+            local divider_line=$(repeat_char "─" "$div_width")
+            printf "  %s\n" "$divider_line"
+          else
+            printf "  ${CYAN}▸${RESET} ${BOLD}%s${RESET}\n" "$item_text"
+          fi
+        else
+          if [[ "$item_text" == ──* ]]; then
+            local div_width=$((inside_width - 4))
+            local divider_line=$(repeat_char "─" "$div_width")
+            printf "  %s\n" "$divider_line"
+          else
+            printf "    %s\n" "$item_text"
           fi
         fi
         lines_printed=$((lines_printed + 1))
@@ -381,6 +507,21 @@ render_menu() {
         lines_printed=$((lines_printed + 1))
       done
       ;;
+
+    profile_actions)
+      echo -e "  ${BOLD}Profile Actions for: ${GREEN}${selected_profile_name}${RESET}"
+      echo ""
+      lines_printed=$((lines_printed + 2))
+
+      for i in "${!profile_action_items[@]}"; do
+        if [ "$i" -eq "$selected" ]; then
+          printf "  ${CYAN}▸${RESET} ${BOLD}%s${RESET}\n" "${profile_action_items[$i]}"
+        else
+          printf "    %s\n" "${profile_action_items[$i]}"
+        fi
+        lines_printed=$((lines_printed + 1))
+      done
+      ;;
   esac
 
   # Footer block
@@ -402,17 +543,21 @@ move_selection() {
   if [ "$dir" = "UP" ]; then
     selected_index=$(( (selected_index - 1 + len) % len ))
     # Skip dividers
-    if [ "$current_menu" = "main" ] && [ "$selected_index" -eq 5 ]; then
+    if [ "$current_menu" = "main" ] && [ "$selected_index" -eq 6 ]; then
       selected_index=$(( (selected_index - 1 + len) % len ))
     elif [ "$current_menu" = "workspace" ] && [[ "${workspace_items[$selected_index]}" == ──* ]]; then
+      selected_index=$(( (selected_index - 1 + len) % len ))
+    elif [ "$current_menu" = "profile" ] && [[ "${profile_items[$selected_index]}" == ──* ]]; then
       selected_index=$(( (selected_index - 1 + len) % len ))
     fi
   else
     selected_index=$(( (selected_index + 1) % len ))
     # Skip dividers
-    if [ "$current_menu" = "main" ] && [ "$selected_index" -eq 5 ]; then
+    if [ "$current_menu" = "main" ] && [ "$selected_index" -eq 6 ]; then
       selected_index=$(( (selected_index + 1) % len ))
     elif [ "$current_menu" = "workspace" ] && [[ "${workspace_items[$selected_index]}" == ──* ]]; then
+      selected_index=$(( (selected_index + 1) % len ))
+    elif [ "$current_menu" = "profile" ] && [[ "${profile_items[$selected_index]}" == ──* ]]; then
       selected_index=$(( (selected_index + 1) % len ))
     fi
   fi
@@ -533,7 +678,11 @@ run_cleanup() {
 
 # Navigate back out of sub-menus
 handle_back() {
-  if [ "$current_menu" != "main" ]; then
+  if [ "$current_menu" = "profile_actions" ]; then
+    current_menu="profile"
+    selected_index=0
+    force_clear=1
+  elif [ "$current_menu" != "main" ]; then
     current_menu="main"
     selected_index=0
     force_clear=1
@@ -552,11 +701,217 @@ handle_select() {
         2) launch_tool "$CODEX_IMAGE_NAME" codex-docker-build codex-docker-shell ;;
         3) launch_tool "$OPENCODE_IMAGE_NAME" opencode-docker-build opencode-docker-shell ;;
         4) current_menu="workspace"; selected_index=0; force_clear=1 ;;
-        5) ;; # divider
-        6) current_menu="build"; selected_index=0; force_clear=1 ;;
-        7) current_menu="config"; selected_index=0; force_clear=1 ;;
-        8) current_menu="cleanup"; selected_index=0; force_clear=1 ;;
-        9) exit 0 ;;
+        5) current_menu="profile"; selected_index=0; force_clear=1 ;;
+        6) ;; # divider
+        7) current_menu="build"; selected_index=0; force_clear=1 ;;
+        8) current_menu="config"; selected_index=0; force_clear=1 ;;
+        9) current_menu="cleanup"; selected_index=0; force_clear=1 ;;
+        10) exit 0 ;;
+      esac
+      ;;
+    profile)
+      local name="${profile_names[$selected_index]}"
+      case "$name" in
+        CREATE)
+          tput cnorm
+          clear
+          echo -e "${BOLD}Create New Profile${RESET}"
+          echo "Type a name for the new profile (alphanumeric, dashes, underscores)."
+          echo ""
+          read -rp "Profile Name: " new_profile_name
+          if [ -n "$new_profile_name" ]; then
+            new_profile_name=$(echo "$new_profile_name" | tr -cd 'a-zA-Z0-9_-')
+            if [ -n "$new_profile_name" ]; then
+              echo "$new_profile_name" > "$HOME/.ai-docker-active-profile"
+              _ai_docker_load_profile "$new_profile_name"
+              RECENTS_FILE="${AI_DOCKER_RECENTS_FILE:-$HOME/.ai-docker-recents}"
+              echo -e "${GREEN}Profile '$new_profile_name' created and activated.${RESET}"
+            else
+              echo -e "${RED}Error: Invalid profile name.${RESET}"
+            fi
+          else
+            echo "Cancelled."
+          fi
+          sleep 1.5
+          tput civis
+          force_clear=1
+          current_menu="main"
+          selected_index=5
+          ;;
+        DIVIDER)
+          ;;
+        BACK)
+          handle_back
+          ;;
+        *)
+          if [ "$name" = "default" ]; then
+            echo "$name" > "$HOME/.ai-docker-active-profile"
+            _ai_docker_load_profile "$name" "$active_mount_path"
+            if [ "$active_mount_path" != "$HOME" ]; then
+              _ai_docker_set_project_profile "$active_mount_path" "$name"
+            fi
+            current_menu="main"
+            selected_index=5
+            force_clear=1
+          else
+            selected_profile_name="$name"
+            current_menu="profile_actions"
+            selected_index=0
+            force_clear=1
+          fi
+          ;;
+      esac
+      ;;
+    profile_actions)
+      case "$selected_index" in
+        0) # Activate
+          echo "$selected_profile_name" > "$HOME/.ai-docker-active-profile"
+          _ai_docker_load_profile "$selected_profile_name" "$active_mount_path"
+          if [ "$active_mount_path" != "$HOME" ]; then
+            _ai_docker_set_project_profile "$active_mount_path" "$selected_profile_name"
+          fi
+          current_menu="main"
+          selected_index=5
+          force_clear=1
+          ;;
+        1) # Rename
+          tput cnorm
+          clear
+          echo -e "${BOLD}Rename Profile: $selected_profile_name${RESET}"
+          echo "Type a new name for the profile (alphanumeric, dashes, underscores)."
+          echo ""
+          read -rp "New Name: " new_name
+          if [ -n "$new_name" ]; then
+            new_name=$(echo "$new_name" | tr -cd 'a-zA-Z0-9_-')
+            if [ -n "$new_name" ] && [ "$new_name" != "default" ]; then
+              local old_dir="$HOME/.ai-docker-ignore/$selected_profile_name"
+              local new_dir="$HOME/.ai-docker-ignore/$new_name"
+              if [ -d "$old_dir" ]; then
+                if [ -d "$new_dir" ]; then
+                  echo -e "${RED}Error: Profile '$new_name' already exists.${RESET}"
+                  sleep 1.5
+                else
+                  mv "$old_dir" "$new_dir"
+                  if [ "${AI_DOCKER_PROFILE:-default}" = "$selected_profile_name" ]; then
+                    echo "$new_name" > "$HOME/.ai-docker-active-profile"
+                  fi
+                  # Update mapping file
+                  local map_file="$HOME/.ai-docker-ignore/project-profiles"
+                  if [ -f "$map_file" ]; then
+                    local tmp_map="${map_file}.tmp"
+                    while IFS= read -r line || [ -n "$line" ]; do
+                      if [ -n "$line" ]; then
+                        local p_path="${line%:*}"
+                        local p_profile="${line##*:}"
+                        if [ "$p_profile" = "$selected_profile_name" ]; then
+                          echo "${p_path}:${new_name}" >> "$tmp_map"
+                        else
+                          echo "$line" >> "$tmp_map"
+                        fi
+                      fi
+                    done < "$map_file"
+                    if [ -f "$tmp_map" ]; then
+                      mv "$tmp_map" "$map_file"
+                    else
+                      > "$map_file"
+                    fi
+                  fi
+                  _ai_docker_load_profile "" "$active_mount_path"
+                  echo -e "${GREEN}Profile renamed to '$new_name'.${RESET}"
+                  sleep 1.5
+                fi
+              else
+                if [ "${AI_DOCKER_PROFILE:-default}" = "$selected_profile_name" ]; then
+                  echo "$new_name" > "$HOME/.ai-docker-active-profile"
+                fi
+                # Update mapping file
+                local map_file="$HOME/.ai-docker-ignore/project-profiles"
+                if [ -f "$map_file" ]; then
+                  local tmp_map="${map_file}.tmp"
+                  while IFS= read -r line || [ -n "$line" ]; do
+                    if [ -n "$line" ]; then
+                      local p_path="${line%:*}"
+                      local p_profile="${line##*:}"
+                      if [ "$p_profile" = "$selected_profile_name" ]; then
+                        echo "${p_path}:${new_name}" >> "$tmp_map"
+                      else
+                        echo "$line" >> "$tmp_map"
+                      fi
+                    fi
+                  done < "$map_file"
+                  if [ -f "$tmp_map" ]; then
+                    mv "$tmp_map" "$map_file"
+                  else
+                    > "$map_file"
+                  fi
+                fi
+                _ai_docker_load_profile "" "$active_mount_path"
+                echo -e "${GREEN}Profile name updated to '$new_name'.${RESET}"
+                sleep 1.5
+              fi
+            else
+              echo -e "${RED}Error: Invalid profile name.${RESET}"
+              sleep 1.5
+            fi
+          else
+            echo "Cancelled."
+            sleep 1
+          fi
+          tput civis
+          current_menu="profile"
+          selected_index=0
+          force_clear=1
+          ;;
+        2) # Delete
+          tput cnorm
+          clear
+          echo -e "${RED}${BOLD}Delete Profile: $selected_profile_name${RESET}"
+          echo "Are you sure you want to delete this profile? All settings will be lost."
+          echo ""
+          read -rp "Type 'yes' to confirm: " confirm
+          if [ "$confirm" = "yes" ]; then
+            local old_dir="$HOME/.ai-docker-ignore/$selected_profile_name"
+            if [ -d "$old_dir" ]; then
+              rm -rf "$old_dir"
+            fi
+            if [ "${AI_DOCKER_PROFILE:-default}" = "$selected_profile_name" ]; then
+              echo "default" > "$HOME/.ai-docker-active-profile"
+            fi
+            local map_file="$HOME/.ai-docker-ignore/project-profiles"
+            if [ -f "$map_file" ]; then
+              local tmp_map="${map_file}.tmp"
+              while IFS= read -r line || [ -n "$line" ]; do
+                if [ -n "$line" ]; then
+                  local p_path="${line%:*}"
+                  local p_profile="${line##*:}"
+                  if [ "$p_profile" != "$selected_profile_name" ]; then
+                    echo "$line" >> "$tmp_map"
+                  fi
+                fi
+              done < "$map_file"
+              if [ -f "$tmp_map" ]; then
+                mv "$tmp_map" "$map_file"
+              else
+                > "$map_file"
+              fi
+            fi
+            _ai_docker_load_profile "" "$active_mount_path"
+            echo -e "${GREEN}Profile deleted.${RESET}"
+            sleep 1.5
+          else
+            echo "Cancelled."
+            sleep 1
+          fi
+          tput civis
+          current_menu="profile"
+          selected_index=0
+          force_clear=1
+          ;;
+        3) # Back
+          current_menu="profile"
+          selected_index=0
+          force_clear=1
+          ;;
       esac
       ;;
     build)
@@ -600,8 +955,7 @@ handle_select() {
             # Expand ~ if present
             custom_input="${custom_input/#\~/$HOME}"
             if [ -d "$custom_input" ]; then
-              active_mount_path=$(cd "$custom_input" 2>/dev/null && pwd)
-              # Also add to recents list
+              activate_workspace "$custom_input"
               _ai_docker_update_recents "$active_mount_path"
               echo -e "${GREEN}Active workspace directory set to: $active_mount_path${RESET}"
             else
@@ -620,12 +974,9 @@ handle_select() {
           handle_back
           ;;
         *)
-          # A directory path was selected
           if [ -d "$path" ]; then
-            active_mount_path="$path"
-            # Update recents order
+            activate_workspace "$path"
             _ai_docker_update_recents "$active_mount_path"
-            # Return to main menu
             current_menu="main"
             selected_index=0
             force_clear=1
@@ -672,6 +1023,7 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 # Start application loop
+activate_workspace "$(pwd)"
 _ai_docker_update_recents "$(pwd)"
 update_image_statuses
 tput civis

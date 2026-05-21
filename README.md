@@ -129,23 +129,35 @@ Reload profile:
 - Zsh: `source ~/.zshrc`
 - PowerShell: `. $PROFILE`
 
-### Where AI tools store auth/config
-- Codex:
-  - Host: `~/.codex-docker-config`
+### Profiles and Configuration Storage
+The CLI supports multiple isolated profiles (e.g., `personal`, `work`, and `default`). Each profile isolates auth, configs, recent workspace paths, and environment files under:
+`~/.ai-docker-ignore/<profile-name>/`
+
+Specifically, for the active profile:
+- **Codex**:
+  - Host: `~/.ai-docker-ignore/<profile>/codex-docker-config`
   - Container: `/root/.codex`
-- Gemini:
-  - Host: `~/.gemini-cli-docker-config`
+- **Gemini**:
+  - Host: `~/.ai-docker-ignore/<profile>/gemini-cli-docker-config`
   - Container: `/root/.gemini`
-- Claude:
-  - Host: `~/.claude-docker-config`
+- **Claude**:
+  - Host: `~/.ai-docker-ignore/<profile>/claude-docker-config`
   - Container: `/root/.claude`
   - `/root/.claude.json` is symlinked to `/root/.claude/claude.json`
-- OpenCode:
-  - Host: `~/.opencode-docker/local` -> Container: `/root/.local`
-  - Host: `~/.opencode-docker/config` -> Container: `/root/.config/opencode`
-  - Host: `~/.opencode-docker/docker-env.env` -> Container environment variables
+- **OpenCode**:
+  - Host: `~/.ai-docker-ignore/<profile>/opencode-docker/local` -> Container: `/root/.local`
+  - Host: `~/.ai-docker-ignore/<profile>/opencode-docker/config` -> Container: `/root/.config/opencode`
+  - Host: `~/.ai-docker-ignore/<profile>/opencode-docker/docker-env.env` -> Container environment variables
 
 Each host config directory includes a `docker-env.env` file that is passed to the container.
+
+#### Managing Profiles
+- **Switching Profiles via TUI**: Select `👤 Switch Active Profile` on the main screen to change profiles or create a new one.
+- **Environment Override**: Set the `AI_DOCKER_PROFILE` environment variable in your terminal session to override the active profile:
+  ```bash
+  export AI_DOCKER_PROFILE=work
+  ```
+- **Active Profile File**: If `AI_DOCKER_PROFILE` is not set, the active profile defaults to the name stored in `~/.ai-docker-active-profile`, and falls back to `default` if the file doesn't exist.
 
 ### Passing environment variables
 Add environment variables to the tool's `docker-env.env` file.

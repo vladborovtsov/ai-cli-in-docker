@@ -1,4 +1,4 @@
-﻿# Dot-source this file to add AI Docker helpers to your PowerShell session.
+# Dot-source this file to add AI Docker helpers to your PowerShell session.
 # Usage:
 #   . .\activate.ps1
 #   codex-docker-build
@@ -16,17 +16,16 @@ $script:GEMINI_IMAGE_NAME = "my-gemini-image"
 $script:CLAUDE_IMAGE_NAME = "my-claude-image"
 $script:OPENCODE_IMAGE_NAME = "my-opencode-image"
 
-$script:CODEX_CONFIG_PATH = Join-Path $HOME ".codex-docker-config"
-$script:GEMINI_CONFIG_PATH = Join-Path $HOME ".gemini-cli-docker-config"
-$script:CLAUDE_CONFIG_PATH = Join-Path $HOME ".claude-docker-config"
-$script:OPENCODE_DOCKER_DIR = Join-Path $HOME ".opencode-docker"
-
 if ($env:AI_DOCKER_TERM_TITLE_ENABLE) {
   $script:AI_DOCKER_TERM_TITLE_ENABLE = $env:AI_DOCKER_TERM_TITLE_ENABLE
 } elseif ($env:CODEX_ITERM_TITLE_ENABLE) {
   $script:AI_DOCKER_TERM_TITLE_ENABLE = $env:CODEX_ITERM_TITLE_ENABLE
 } else {
   $script:AI_DOCKER_TERM_TITLE_ENABLE = "1"
+}
+
+if ($env:AI_DOCKER_PROFILE -and -not $script:AI_DOCKER_PROFILE_ENV_OVERRIDE) {
+  $script:AI_DOCKER_PROFILE_ENV_OVERRIDE = $env:AI_DOCKER_PROFILE
 }
 
 $scriptPath = $PSCommandPath
@@ -38,7 +37,6 @@ if (-not $script:AI_DOCKER_REPO_DIR) {
   $script:AI_DOCKER_REPO_DIR = (Get-Location).Path
 }
 
-$script:AI_DOCKER_RECENTS_FILE = Join-Path $HOME ".ai-docker-recents"
 $script:AI_DOCKER_ACTIVE_WORKSPACE = (Get-Location).Path
 
 function _ai_docker_ensure_dir {
@@ -63,20 +61,232 @@ function _ai_docker_ensure_file {
   }
 }
 
-foreach ($dir in @(
-  $script:CODEX_CONFIG_PATH,
-  $script:GEMINI_CONFIG_PATH,
-  $script:CLAUDE_CONFIG_PATH,
-  $script:OPENCODE_DOCKER_DIR
-)) {
-  _ai_docker_ensure_dir -Path $dir
-  _ai_docker_ensure_file -Path (Join-Path $dir "docker-env.env")
-  if ($dir -eq $script:CLAUDE_CONFIG_PATH) {
-    _ai_docker_ensure_file -Path (Join-Path $dir "claude.json")
+function _ai_docker_migrate_legacy {
+  $legacyCodex = Join-Path $HOME ".codex-docker-config"
+  $legacyGemini = Join-Path $HOME ".gemini-cli-docker-config"
+  $legacyClaude = Join-Path $HOME ".claude-docker-config"
+  $legacyOpencode = Join-Path $HOME ".opencode-docker"
+  $legacyRecents = Join-Path $HOME ".ai-docker-recents"
+
+  $targetDir = Join-Path (Join-Path $HOME ".ai-docker-ignore") "default"
+
+  # Helper to migrate directory
+  function _ai_docker_migrate_dir {
+    param([string]$Src, [string]$Dest)
+    if (Test-Path -LiteralPath $Src -PathType Container) {
+      _ai_docker_ensure_dir -Path (Split-Path -Parent $Dest)
+      if (-not (Test-Path -LiteralPath $Dest -PathType Container)) {
+        Move-Item -LiteralPath $Src -Destination $Dest -Force -ErrorAction SilentlyContinue
+      } else {
+        Get-ChildItem -LiteralPath $Src -Force -ErrorAction SilentlyContinue | ForEach-Object {
+          $destPath = Join-Path $Dest $_.Name
+          Move-Item -LiteralPath $_.FullName -Destination $destPath -Force -ErrorAction SilentlyContinue
+        }
+        Remove-Item -LiteralPath $Src -Recurse -Force -ErrorAction SilentlyContinue
+      }
+    }
+  }
+
+  if (Test-Path -LiteralPath $legacyRecents -PathType Leaf) {
+    _ai_docker_ensure_dir -Path $targetDir
+    Move-Item -LiteralPath $legacyRecents -Destination (Join-Path $targetDir "ai-docker-recents") -Force -ErrorAction SilentlyContinue
+  } elseif (Test-Path -LiteralPath $legacyRecents -PathType Container) {
+    _ai_docker_ensure_dir -Path $targetDir
+    $innerRecents = Join-Path $legacyRecents "recents"
+    $innerAiRecents = Join-Path $legacyRecents "ai-docker-recents"
+    if (Test-Path -LiteralPath $innerRecents -PathType Leaf) {
+      Move-Item -LiteralPath $innerRecents -Destination (Join-Path $targetDir "ai-docker-recents") -Force -ErrorAction SilentlyContinue
+    } elseif (Test-Path -LiteralPath $innerAiRecents -PathType Leaf) {
+      Move-Item -LiteralPath $innerAiRecents -Destination (Join-Path $targetDir "ai-docker-recents") -Force -ErrorAction SilentlyContinue
+    }
+    Remove-Item -LiteralPath $legacyRecents -Recurse -Force -ErrorAction SilentlyContinue
+  }
+
+  _ai_docker_migrate_dir -Src $legacyCodex -Dest (Join-Path $targetDir "codex-docker-config")
+  _ai_docker_migrate_dir -Src $legacyGemini -Dest (Join-Path $targetDir "gemini-cli-docker-config")
+  _ai_docker_migrate_dir -Src $legacyClaude -Dest (Join-Path $targetDir "claude-docker-config")
+  _ai_docker_migrate_dir -Src $legacyOpencode -Dest (Join-Path $targetDir "opencode-docker")
+}
+
+function _ai_docker_get_project_profile {
+  param([string]$TargetPath)
+  $mapFile = Join-Path (Join-Path $HOME ".ai-docker-ignore") "project-profiles"
+  if (Test-Path -LiteralPath $mapFile -PathType Leaf) {
+    $resolvedTarget = _ai_docker_resolve_dir -Path $TargetPath
+    $lines = Get-Content -LiteralPath $mapFile -ErrorAction SilentlyContinue
+    if ($lines) {
+      foreach ($line in $lines) {
+        if ([string]::IsNullOrWhiteSpace($line) -or $line.StartsWith("#")) {
+          continue
+        }
+        $lastColon = $line.LastIndexOf(':')
+        if ($lastColon -gt 0) {
+          $pPath = $line.Substring(0, $lastColon)
+          $pProfile = $line.Substring($lastColon + 1)
+          if ($pPath -eq $resolvedTarget) {
+            return $pProfile.Trim()
+          }
+        }
+      }
+    }
+  }
+  return $null
+}
+
+function _ai_docker_set_project_profile {
+  param([string]$TargetPath, [string]$ProfileName)
+  $mapFile = Join-Path (Join-Path $HOME ".ai-docker-ignore") "project-profiles"
+  _ai_docker_ensure_dir -Path (Split-Path -Parent $mapFile)
+
+  $resolvedTarget = _ai_docker_resolve_dir -Path $TargetPath
+  $tmpFile = "$mapFile.tmp"
+
+  $found = $false
+  $newLines = [System.Collections.Generic.List[string]]::new()
+
+  if (Test-Path -LiteralPath $mapFile -PathType Leaf) {
+    $lines = Get-Content -LiteralPath $mapFile -ErrorAction SilentlyContinue
+    if ($lines) {
+      foreach ($line in $lines) {
+        if ([string]::IsNullOrWhiteSpace($line)) {
+          continue
+        }
+        $lastColon = $line.LastIndexOf(':')
+        if ($lastColon -gt 0) {
+          $pPath = $line.Substring(0, $lastColon)
+          if ($pPath -eq $resolvedTarget) {
+            if (-not [string]::IsNullOrWhiteSpace($ProfileName)) {
+              $newLines.Add("${resolvedTarget}:${ProfileName}")
+            }
+            $found = $true
+          } else {
+            $newLines.Add($line)
+          }
+        } else {
+          $newLines.Add($line)
+        }
+      }
+    }
+  }
+
+  if (-not $found -and -not [string]::IsNullOrWhiteSpace($ProfileName)) {
+    $newLines.Add("${resolvedTarget}:${ProfileName}")
+  }
+
+  if ($newLines.Count -gt 0) {
+    $newLines | Set-Content -LiteralPath $tmpFile -ErrorAction Stop
+    Move-Item -LiteralPath $tmpFile -Destination $mapFile -Force -ErrorAction Stop
+  } else {
+    if (Test-Path -LiteralPath $mapFile -PathType Leaf) {
+      Remove-Item -LiteralPath $mapFile -Force -ErrorAction SilentlyContinue
+    }
+    New-Item -ItemType File -Path $mapFile -Force | Out-Null
   }
 }
-_ai_docker_ensure_dir -Path (Join-Path $script:OPENCODE_DOCKER_DIR "local")
-_ai_docker_ensure_dir -Path (Join-Path $script:OPENCODE_DOCKER_DIR "config")
+
+function _ai_docker_load_profile {
+  param(
+    [string]$TargetProfile,
+    [string]$Directory
+  )
+
+  _ai_docker_migrate_legacy
+
+  if (-not [string]::IsNullOrWhiteSpace($TargetProfile)) {
+    $script:AI_DOCKER_PROFILE = $TargetProfile
+  }
+
+  if ([string]::IsNullOrWhiteSpace($script:AI_DOCKER_PROFILE)) {
+    if ($script:AI_DOCKER_PROFILE_ENV_OVERRIDE) {
+      $script:AI_DOCKER_PROFILE = $script:AI_DOCKER_PROFILE_ENV_OVERRIDE
+    } else {
+      $checkDir = if ([string]::IsNullOrWhiteSpace($Directory)) { (Get-Location).Path } else { $Directory }
+      $resolvedDir = _ai_docker_resolve_dir -Path $checkDir
+
+      $mappedProfile = $null
+      if (-not [string]::IsNullOrWhiteSpace($resolvedDir)) {
+        $mappedProfile = _ai_docker_get_project_profile -TargetPath $resolvedDir
+      }
+
+      if (-not [string]::IsNullOrWhiteSpace($mappedProfile)) {
+        $script:AI_DOCKER_PROFILE = $mappedProfile
+      } else {
+        $profileFile = Join-Path $HOME ".ai-docker-active-profile"
+        if (Test-Path -LiteralPath $profileFile -PathType Leaf) {
+          $script:AI_DOCKER_PROFILE = (Get-Content -LiteralPath $profileFile -Raw -ErrorAction SilentlyContinue).Trim()
+        } else {
+          $script:AI_DOCKER_PROFILE = "default"
+        }
+      }
+    }
+  }
+
+  $script:AI_DOCKER_PROFILE = if ([string]::IsNullOrWhiteSpace($script:AI_DOCKER_PROFILE)) { "default" } else { $script:AI_DOCKER_PROFILE }
+
+  $profileDir = Join-Path (Join-Path $HOME ".ai-docker-ignore") $script:AI_DOCKER_PROFILE
+  $script:CODEX_CONFIG_PATH = Join-Path $profileDir "codex-docker-config"
+  $script:GEMINI_CONFIG_PATH = Join-Path $profileDir "gemini-cli-docker-config"
+  $script:CLAUDE_CONFIG_PATH = Join-Path $profileDir "claude-docker-config"
+  $script:OPENCODE_DOCKER_DIR = Join-Path $profileDir "opencode-docker"
+  $script:AI_DOCKER_RECENTS_FILE = Join-Path $profileDir "ai-docker-recents"
+
+  foreach ($dir in @(
+    $script:CODEX_CONFIG_PATH,
+    $script:GEMINI_CONFIG_PATH,
+    $script:CLAUDE_CONFIG_PATH,
+    $script:OPENCODE_DOCKER_DIR
+  )) {
+    _ai_docker_ensure_dir -Path $dir
+    _ai_docker_ensure_file -Path (Join-Path $dir "docker-env.env")
+    if ($dir -eq $script:CLAUDE_CONFIG_PATH) {
+      _ai_docker_ensure_file -Path (Join-Path $dir "claude.json")
+    }
+  }
+  _ai_docker_ensure_dir -Path (Join-Path $script:OPENCODE_DOCKER_DIR "local")
+  _ai_docker_ensure_dir -Path (Join-Path $script:OPENCODE_DOCKER_DIR "config")
+}
+
+_ai_docker_load_profile -TargetProfile "" -Directory (Get-Location).Path
+
+function ai-docker-profile {
+  param([string]$Target)
+
+  if ([string]::IsNullOrWhiteSpace($Target)) {
+    Write-Host "Current profile: $($script:AI_DOCKER_PROFILE)"
+    Write-Host "Available profiles:"
+    Write-Host "  default"
+    Write-Host "  personal"
+    Write-Host "  work"
+    $ignoreDir = Join-Path $HOME ".ai-docker-ignore"
+    if (Test-Path -LiteralPath $ignoreDir -PathType Container) {
+      Get-ChildItem -LiteralPath $ignoreDir -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+        $name = $_.Name
+        if ($name -ne "default" -and $name -ne "personal" -and $name -ne "work" -and $name -ne "project-profiles") {
+          Write-Host "  $name"
+        }
+      }
+    }
+    return
+  }
+
+  $sanitized = $Target -replace '[^a-zA-Z0-9_-]', ''
+  if ($sanitized -ne $Target -or [string]::IsNullOrWhiteSpace($Target)) {
+    Write-Error "Error: Invalid profile name. Only alphanumeric, dashes, and underscores are allowed."
+    return
+  }
+
+  $profileFile = Join-Path $HOME ".ai-docker-active-profile"
+  $Target | Set-Content -LiteralPath $profileFile -ErrorAction Stop
+  _ai_docker_load_profile -TargetProfile $Target
+
+  $currentPwd = (Get-Location).Path
+  if (-not (_ai_docker_is_home_path -Path $currentPwd)) {
+    _ai_docker_set_project_profile -TargetPath $currentPwd -ProfileName $Target
+    Write-Host "Profile '$Target' activated and mapped to current directory."
+  } else {
+    Write-Host "Profile '$Target' activated globally."
+  }
+}
 
 function _ai_docker_resolve_dir {
   param([Parameter(Mandatory = $true)][string]$Path)
@@ -414,6 +624,7 @@ function codex-docker-shell {
     return 1
   }
 
+  _ai_docker_load_profile -TargetProfile "" -Directory $cwd
   _ai_docker_update_recents -PathToAdd $cwd
   if (-not (_ai_docker_confirm_home_mount -Path $cwd -CommandName 'codex-docker-shell')) {
     Write-Host "Canceled."
@@ -450,6 +661,7 @@ function codex-auth-docker-run {
     return 1
   }
 
+  _ai_docker_load_profile -TargetProfile "" -Directory $cwd
   _ai_docker_update_recents -PathToAdd $cwd
   if (-not (_ai_docker_confirm_home_mount -Path $cwd -CommandName 'codex-auth-docker-run')) {
     Write-Host "Canceled."
@@ -484,6 +696,7 @@ function gemini-docker-shell {
     return 1
   }
 
+  _ai_docker_load_profile -TargetProfile "" -Directory $cwd
   _ai_docker_update_recents -PathToAdd $cwd
   if (-not (_ai_docker_confirm_home_mount -Path $cwd -CommandName 'gemini-docker-shell')) {
     Write-Host "Canceled."
@@ -520,6 +733,7 @@ function claude-docker-shell {
     return 1
   }
 
+  _ai_docker_load_profile -TargetProfile "" -Directory $cwd
   _ai_docker_update_recents -PathToAdd $cwd
   if (-not (_ai_docker_confirm_home_mount -Path $cwd -CommandName 'claude-docker-shell')) {
     Write-Host "Canceled."
@@ -556,6 +770,7 @@ function opencode-docker-shell {
     return 1
   }
 
+  _ai_docker_load_profile -TargetProfile "" -Directory $cwd
   _ai_docker_update_recents -PathToAdd $cwd
   if (-not (_ai_docker_confirm_home_mount -Path $cwd -CommandName 'opencode-docker-shell')) {
     Write-Host "Canceled."
@@ -613,13 +828,17 @@ function ai-docker {
     return 1
   }
 
+  _ai_docker_load_profile -TargetProfile "" -Directory (Get-Location).Path
+
   if ([string]::IsNullOrWhiteSpace($Workspace)) {
     & $menuPath
   } else {
     & $menuPath -Workspace $Workspace
   }
 
-  return $LASTEXITCODE
+  $exitCode = $LASTEXITCODE
+  _ai_docker_load_profile -TargetProfile "" -Directory (Get-Location).Path
+  return $exitCode
 }
 
 function ai-docker-deactivate {
@@ -628,7 +847,8 @@ function ai-docker-deactivate {
     '_ai_docker_update_recents', '_ai_docker_get_workspace', '_ai_docker_is_home_path',
     '_ai_docker_confirm_home_mount', '_ai_docker_get_tz', '_ai_docker_should_use_host_network',
     '_ai_docker_set_title', '_ai_docker_run_container', '_ai_docker_build_image',
-    '_ai_docker_resolve_no_cache',
+    '_ai_docker_resolve_no_cache', '_ai_docker_load_profile',
+    '_ai_docker_migrate_legacy', '_ai_docker_migrate_dir', '_ai_docker_get_project_profile', '_ai_docker_set_project_profile', 'ai-docker-profile',
     'codex-docker-build', 'codex-docker-shell', 'codex-auth-docker-run',
     'gemini-docker-build', 'gemini-docker-shell',
     'claude-docker-build', 'claude-docker-shell',
