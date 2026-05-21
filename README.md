@@ -1,155 +1,187 @@
 ## AI CLI in Docker
 
-Run AI CLI tools (OpenAI Codex, Google Gemini) inside Docker to keep your host clean while persisting CLI auth/config on your machine.
+Run AI CLI tools (OpenAI Codex, Google Gemini, Claude, OpenCode) inside Docker to keep your host clean while persisting CLI auth and config on your machine.
 
 ### Contents
-- [Why AI CLI in Docker?](WHY.md) — Rationale behind this project.
-- `Dockerfile.codex`: Based on ghcr.io/openai/codex-universal with @openai/codex preinstalled.
-- `Dockerfile.gemini`: Based on node:20 with @google/gemini-cli preinstalled.
-- `Dockerfile.claude`: Based on ubuntu:24.04 with @anthropic-ai/claude-code preinstalled.
-- `Dockerfile.opencode`: Based on node:20 with opencode preinstalled.
-- `activate.sh` adds helper shell functions:
-  - `ai-docker` — launch the interactive Terminal User Interface (TUI) to easily manage and run all tools.
-  - `codex-docker-build` / `codex-docker-shell` — build/run the Codex container.
-  - `gemini-docker-build` / `gemini-docker-shell` — build/run the Gemini container.
-  - `claude-docker-build` / `claude-docker-shell` — build/run the Claude container.
-  - `opencode-docker-build` / `opencode-docker-shell` — build/run the OpenCode container.
-  - `docker-ai-build-all` — build all AI images without using cache.
-  - `codex-auth-docker-run` — run Codex auth flow inside the container.
-  - `ai-docker-deactivate` — remove the helper functions from the current shell.
+- [Why AI CLI in Docker?](WHY.md): Rationale behind this project.
+- `Dockerfile.codex`: Based on `ghcr.io/openai/codex-universal` with `@openai/codex` preinstalled.
+- `Dockerfile.gemini`: Based on `node:20` with `@google/gemini-cli` preinstalled.
+- `Dockerfile.claude`: Based on `ubuntu:24.04` with `@anthropic-ai/claude-code` preinstalled.
+- `Dockerfile.opencode`: Based on `ubuntu:24.04` with `opencode-ai` preinstalled.
+- `activate.sh`: Bash/Zsh helper functions.
+- `ai-docker.sh`: Interactive Bash TUI.
+- `activate.ps1`: PowerShell helper functions for Windows.
+- `ai-docker.ps1`: Interactive PowerShell menu for Windows.
 
 ### Prerequisites
 - Docker installed and running.
-- Bash or Zsh shell.
+- One of:
+  - Bash or Zsh (Linux/macOS).
+  - PowerShell 5.1+ or PowerShell 7+ (Windows).
 
-### Quick Start
+### Quick Start (Bash/Zsh)
 1) Clone this repo and enter the directory.
 
 2) Source the activation script:
-   ```bash
-   source ./activate.sh
-   ```
+```bash
+source ./activate.sh
+```
 
-3) Run the interactive TUI tool:
-   ```bash
-   ai-docker
-   ```
-   This loads a zero-dependency menu where you can:
-   - Check if your tool images are built or missing.
-   - Build or rebuild images.
-   - Launch your chosen container shell.
-   - Edit API keys and configuration values (`docker-env.env` files).
-   - Prune stopped containers or dangling images.
+3) Launch the interactive TUI:
+```bash
+ai-docker
+```
 
-4) Or, launch directly via CLI helper commands if you prefer:
-   - `claude-docker-shell`
-   - `gemini-docker-shell`
-   - `codex-docker-shell`
-   - `opencode-docker-shell`
+4) Or run helpers directly:
+- `claude-docker-shell`
+- `gemini-docker-shell`
+- `codex-docker-shell`
+- `opencode-docker-shell`
 
-What you get when the container starts:
-- A tmux session named after your current folder (overridable with TMUX_SESSION).
+### Quick Start (Windows PowerShell)
+1) Clone this repo and enter the directory in PowerShell.
+
+2) Load helper functions into your current session:
+```powershell
+. .\activate.ps1
+```
+
+If script execution is blocked, run this first in the same terminal:
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+```
+
+3) Launch the interactive menu:
+```powershell
+ai-docker
+```
+
+4) Or run helpers directly:
+- `claude-docker-shell`
+- `gemini-docker-shell`
+- `codex-docker-shell`
+- `opencode-docker-shell`
+
+### Available helper commands
+- `ai-docker`: Launch interactive menu (Bash TUI or PowerShell menu).
+- `codex-docker-build` / `codex-docker-shell`
+- `gemini-docker-build` / `gemini-docker-shell`
+- `claude-docker-build` / `claude-docker-shell`
+- `opencode-docker-build` / `opencode-docker-shell`
+- `docker-ai-build-all`: Build all images with no cache.
+- `codex-auth-docker-run`: Run Codex auth flow inside container.
+- `ai-docker-deactivate`: Remove helper functions from current shell.
+
+### What you get when the container starts
+- A tmux session named after your current folder (overridable with `TMUX_SESSION`).
 - Windows:
-  1) AI CLI (active by default) — runs `codex`, `gemini` or `claude`, then keeps the shell open.
+  1) AI CLI (active by default): runs `codex`, `gemini`, `claude`, or `opencode`, then keeps shell open.
   2) Shell
   3) Shell
-  4) htop
+  4) `htop`
 
 ### tmux basics in this setup
-- Switch windows (iterate):
-  - Ctrl-b then n (next) / p (previous)
-  - Ctrl-b then 1/2/3/4 to jump directly
-  - Ctrl-b then w to choose from a list
-- Create a new window: Ctrl-b then c
-- Rename current window: Ctrl-b then ,
-- Close current window: type `exit` in the window, or Ctrl-b then & (confirm)
-- Detach from tmux (leave it running): Ctrl-b then d
-- Re-attach later inside the container: tmux attach
-- Extra binding in this image: Ctrl-b then Q shows a confirmation prompt and then kills the entire tmux server (all sessions).
+- Switch windows:
+  - `Ctrl-b` then `n` (next) / `p` (previous)
+  - `Ctrl-b` then `1/2/3/4` to jump directly
+  - `Ctrl-b` then `w` to choose from a list
+- Create a new window: `Ctrl-b` then `c`
+- Rename current window: `Ctrl-b` then `,`
+- Close current window: type `exit`, or `Ctrl-b` then `&`
+- Detach from tmux: `Ctrl-b` then `d`
+- Re-attach inside container: `tmux attach`
+- Extra binding: `Ctrl-b` then `Q` prompts then kills all tmux sessions.
 
 More tmux docs:
 - https://github.com/tmux/tmux/wiki
-- man tmux
+- `man tmux`
 
-### Make more room for the session name in the tmux status bar
-By default, tmux truncates the left status (where the session name appears) to ~10 characters. This setup increases it to 32 automatically. Customize it if needed:
+### Make more room for the session name in tmux status bar
+By default, tmux truncates the left status text. This setup increases it to 32 characters.
 - One-off run: `TMUX_STATUS_LEFT_LENGTH=50 gemini-docker-shell`
-- Persist for your shell session: `export TMUX_STATUS_LEFT_LENGTH=50` before running any `*-docker-shell` function.
+- Persist for current shell session: `export TMUX_STATUS_LEFT_LENGTH=50`
 
-### Persist activation in your shell (bashrc/zshrc)
-To have the helper functions available in every new shell, add a line to your shell init file that sources activate.sh from this repo. Replace /absolute/path/to/OpenAICodexInDocker with your actual path.
+### Persist activation in shell profile
+Add activation to your shell profile so helpers are available in new terminals.
 
-- Bash (e.g., ~/.bashrc or ~/.bash_profile on macOS):
-  ```bash
-  if [ -f "/absolute/path/to/OpenAICodexInDocker/activate.sh" ]; then
-    . "/absolute/path/to/OpenAICodexInDocker/activate.sh"
-  fi
-  ```
+Bash (`~/.bashrc` or `~/.bash_profile`):
+```bash
+if [ -f "/absolute/path/to/ai-cli-in-docker/activate.sh" ]; then
+  . "/absolute/path/to/ai-cli-in-docker/activate.sh"
+fi
+```
 
-- Zsh (e.g., ~/.zshrc):
-  ```shell
-  if [ -f "/absolute/path/to/OpenAICodexInDocker/activate.sh" ]; then
-    source "/absolute/path/to/OpenAICodexInDocker/activate.sh"
-  fi
-  ```
+Zsh (`~/.zshrc`):
+```bash
+if [ -f "/absolute/path/to/ai-cli-in-docker/activate.sh" ]; then
+  source "/absolute/path/to/ai-cli-in-docker/activate.sh"
+fi
+```
 
-After editing your rc file, reload it or open a new terminal:
-- For Bash: source ~/.bashrc
-- For Zsh: source ~/.zshrc
+PowerShell (`$PROFILE`):
+```powershell
+if (!(Test-Path $PROFILE)) { New-Item -ItemType File -Path $PROFILE -Force | Out-Null }
+Add-Content -Path $PROFILE -Value '. "C:\absolute\path\to\ai-cli-in-docker\activate.ps1"'
+```
+
+Reload profile:
+- Bash: `source ~/.bashrc`
+- Zsh: `source ~/.zshrc`
+- PowerShell: `. $PROFILE`
 
 ### Where AI tools store auth/config
-- **Codex**:
+- Codex:
   - Host: `~/.codex-docker-config`
   - Container: `/root/.codex`
-- **Gemini**:
+- Gemini:
   - Host: `~/.gemini-cli-docker-config`
   - Container: `/root/.gemini`
-- **Claude**:
+- Claude:
   - Host: `~/.claude-docker-config`
-  - Container: `/root/.claude` (with `/root/.claude.json` symlinked to `/root/.claude/claude.json`)
-- **OpenCode**:
+  - Container: `/root/.claude`
+  - `/root/.claude.json` is symlinked to `/root/.claude/claude.json`
+- OpenCode:
   - Host: `~/.opencode-docker/local` -> Container: `/root/.local`
   - Host: `~/.opencode-docker/config` -> Container: `/root/.config/opencode`
   - Host: `~/.opencode-docker/docker-env.env` -> Container environment variables
 
-Each of these directories contains a `docker-env.env` file that is automatically passed to the corresponding container.
+Each host config directory includes a `docker-env.env` file that is passed to the container.
 
-### Passing Environment Variables
+### Passing environment variables
+Add environment variables to the tool's `docker-env.env` file.
 
-To pass environment variables to your AI tools, add them to the `docker-env.env` file in the tool's host configuration directory.
-
-**Example for Claude (`~/.claude-docker-config/docker-env.env`):**
+Example for Claude (`~/.claude-docker-config/docker-env.env`):
 ```env
 ANTHROPIC_BASE_URL=http://host.docker.internal:1234
 ANTHROPIC_AUTH_TOKEN=lm
 ANTHROPIC_MODEL=mlx-community/qwen3.5-9b
 ```
 
-You can back up or remove these directories on your host to reset auth or environment variables.
+### Known quirk with Codex auth link
+`codex-auth-docker-run` may print a wrapped sign-in URL.
+If your terminal cannot open it directly:
+- Copy the full URL carefully.
+- Remove line breaks/spaces in a text editor.
+- Open the cleaned URL in your browser.
 
-### Known quirk with codex auth link
-When you run codex-auth-docker-run, Codex may print the sign-in URL with line breaks due to TTY wrapping in Docker. If your terminal doesn’t let you open the link directly:
-- Carefully select and copy the full URL from the output.
-- Paste it into a text editor and remove line breaks/spaces so it’s a single continuous URL.
-- Paste the cleaned URL into your browser to complete the login.
+### Known quirk with Gemini CLI
+On first login, Gemini CLI may become unresponsive. Restart it and try again.
 
-### Known quirk with gemini cli
-On first login, gemini cli may become unresponsive. Kill it and launch again. should work.
-
-## Tips & Tricks
+## Tips and Tricks
 
 ### How do I insert line breaks in messages?
-To send multi-line messages, use `CTRL+J` to insert a line break. 
+Use `Ctrl+J` to insert a line break.
 
-This has been verified to work in:
+Verified in:
 - `gemini cli`
 - `codex cli`
 - `opencode`
 
-### Additional Tips
-- Rebuild an image after changing its Dockerfile: `codex-docker-build`, `gemini-docker-build`, etc.
-- Temporarily remove all helper functions from your current shell: `ai-docker-deactivate`
+### Additional tips
+- Rebuild after changing a Dockerfile: `codex-docker-build`, `gemini-docker-build`, etc.
+- Remove helper functions from current shell: `ai-docker-deactivate`
 
 ### Notes
-- --network=host is used for the auth flow to simplify opening the local browser and callbacks.
-
+- On Linux hosts, `codex-auth-docker-run` uses `--network=host` by default.
+- On Windows/macOS with Docker Desktop, host networking is disabled by default in `activate.ps1`.
+- To force host networking in PowerShell helpers (only if your Docker setup supports it), set `AI_DOCKER_USE_HOST_NETWORK=1`.

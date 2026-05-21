@@ -1,0 +1,642 @@
+# Dot-source this file to add AI Docker helpers to your PowerShell session.
+# Usage:
+#   . .\activate.ps1
+#   codex-docker-build
+#   codex-docker-shell
+#   gemini-docker-build
+#   gemini-docker-shell
+#   opencode-docker-build
+#   opencode-docker-shell
+#   claude-docker-build
+#   claude-docker-shell
+#   docker-ai-build-all
+
+$script:CODEX_IMAGE_NAME = "my-codex-image"
+$script:GEMINI_IMAGE_NAME = "my-gemini-image"
+$script:CLAUDE_IMAGE_NAME = "my-claude-image"
+$script:OPENCODE_IMAGE_NAME = "my-opencode-image"
+
+$script:CODEX_CONFIG_PATH = Join-Path $HOME ".codex-docker-config"
+$script:GEMINI_CONFIG_PATH = Join-Path $HOME ".gemini-cli-docker-config"
+$script:CLAUDE_CONFIG_PATH = Join-Path $HOME ".claude-docker-config"
+$script:OPENCODE_DOCKER_DIR = Join-Path $HOME ".opencode-docker"
+
+if ($env:AI_DOCKER_TERM_TITLE_ENABLE) {
+  $script:AI_DOCKER_TERM_TITLE_ENABLE = $env:AI_DOCKER_TERM_TITLE_ENABLE
+} elseif ($env:CODEX_ITERM_TITLE_ENABLE) {
+  $script:AI_DOCKER_TERM_TITLE_ENABLE = $env:CODEX_ITERM_TITLE_ENABLE
+} else {
+  $script:AI_DOCKER_TERM_TITLE_ENABLE = "1"
+}
+
+$scriptPath = $PSCommandPath
+if (-not $scriptPath) {
+  $scriptPath = $MyInvocation.MyCommand.Path
+}
+$script:AI_DOCKER_REPO_DIR = Split-Path -Parent $scriptPath
+if (-not $script:AI_DOCKER_REPO_DIR) {
+  $script:AI_DOCKER_REPO_DIR = (Get-Location).Path
+}
+
+$script:AI_DOCKER_RECENTS_FILE = Join-Path $HOME ".ai-docker-recents"
+$script:AI_DOCKER_ACTIVE_WORKSPACE = (Get-Location).Path
+
+function _ai_docker_ensure_dir {
+  param([Parameter(Mandatory = $true)][string]$Path)
+  if (-not (Test-Path -LiteralPath $Path -PathType Container)) {
+    try {
+      New-Item -ItemType Directory -Path $Path -Force -ErrorAction Stop | Out-Null
+    } catch {
+      Write-Warning "Could not create directory '$Path': $($_.Exception.Message)"
+    }
+  }
+}
+
+function _ai_docker_ensure_file {
+  param([Parameter(Mandatory = $true)][string]$Path)
+  if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+    try {
+      New-Item -ItemType File -Path $Path -Force -ErrorAction Stop | Out-Null
+    } catch {
+      Write-Warning "Could not create file '$Path': $($_.Exception.Message)"
+    }
+  }
+}
+
+foreach ($dir in @(
+  $script:CODEX_CONFIG_PATH,
+  $script:GEMINI_CONFIG_PATH,
+  $script:CLAUDE_CONFIG_PATH,
+  $script:OPENCODE_DOCKER_DIR
+)) {
+  _ai_docker_ensure_dir -Path $dir
+  _ai_docker_ensure_file -Path (Join-Path $dir "docker-env.env")
+  if ($dir -eq $script:CLAUDE_CONFIG_PATH) {
+    _ai_docker_ensure_file -Path (Join-Path $dir "claude.json")
+  }
+}
+_ai_docker_ensure_dir -Path (Join-Path $script:OPENCODE_DOCKER_DIR "local")
+_ai_docker_ensure_dir -Path (Join-Path $script:OPENCODE_DOCKER_DIR "config")
+
+function _ai_docker_resolve_dir {
+  param([Parameter(Mandatory = $true)][string]$Path)
+  try {
+    return (Resolve-Path -LiteralPath $Path -ErrorAction Stop).ProviderPath
+  } catch {
+    return $Path
+  }
+}
+
+function _ai_docker_update_recents {
+  param([string]$PathToAdd)
+
+  if ([string]::IsNullOrWhiteSpace($PathToAdd)) {
+    return
+  }
+  if (-not (Test-Path -LiteralPath $PathToAdd -PathType Container)) {
+    return
+  }
+
+  $resolvedAdd = _ai_docker_resolve_dir -Path $PathToAdd
+  $candidates = @($resolvedAdd)
+
+  if (Test-Path -LiteralPath $script:AI_DOCKER_RECENTS_FILE -PathType Leaf) {
+    $candidates += Get-Content -LiteralPath $script:AI_DOCKER_RECENTS_FILE -ErrorAction SilentlyContinue
+  }
+
+  $seen = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::OrdinalIgnoreCase)
+  $unique = New-Object 'System.Collections.Generic.List[string]'
+
+  foreach ($candidate in $candidates) {
+    if ([string]::IsNullOrWhiteSpace($candidate)) {
+      continue
+    }
+    if (-not (Test-Path -LiteralPath $candidate -PathType Container)) {
+      continue
+    }
+
+    $resolved = _ai_docker_resolve_dir -Path $candidate
+    if ($seen.Add($resolved)) {
+      [void]$unique.Add($resolved)
+      if ($unique.Count -ge 10) {
+        break
+      }
+    }
+  }
+
+  if ($unique.Count -gt 0) {
+    $unique | Set-Content -LiteralPath $script:AI_DOCKER_RECENTS_FILE
+  } else {
+    Set-Content -LiteralPath $script:AI_DOCKER_RECENTS_FILE -Value @()
+  }
+}
+
+function _ai_docker_get_workspace {
+  param([string]$Path)
+
+  if ([string]::IsNullOrWhiteSpace($Path)) {
+    return (Get-Location).Path
+  }
+
+  if (-not (Test-Path -LiteralPath $Path -PathType Container)) {
+    throw "Directory '$Path' does not exist."
+  }
+
+  return _ai_docker_resolve_dir -Path $Path
+}
+
+function _ai_docker_is_home_path {
+  param([Parameter(Mandatory = $true)][string]$Path)
+
+  $resolvedPath = [System.IO.Path]::GetFullPath($Path).TrimEnd('\\')
+  $resolvedHome = [System.IO.Path]::GetFullPath($HOME).TrimEnd('\\')
+  return $resolvedPath -ieq $resolvedHome
+}
+
+function _ai_docker_confirm_home_mount {
+  param(
+    [Parameter(Mandatory = $true)][string]$Path,
+    [Parameter(Mandatory = $true)][string]$CommandName
+  )
+
+  if (-not (_ai_docker_is_home_path -Path $Path)) {
+    return $true
+  }
+
+  Write-Warning "You are running $CommandName from your HOME directory."
+  Write-Warning "This will mount your entire HOME into the container workspace."
+  $choice = Read-Host "Proceed with mounting HOME? [y/N]"
+  return $choice -match '^(y|yes)$'
+}
+
+function _ai_docker_get_tz {
+  if ($env:TZ) {
+    return $env:TZ
+  }
+
+  try {
+    $windowsId = (Get-TimeZone).Id
+    if (-not [string]::IsNullOrWhiteSpace($windowsId)) {
+      $iana = ""
+      $ok = [System.TimeZoneInfo]::TryConvertWindowsIdToIanaId($windowsId, [ref]$iana)
+      if ($ok -and -not [string]::IsNullOrWhiteSpace($iana)) {
+        return $iana
+      }
+    }
+  } catch {
+    # Fall through to UTC on older runtimes where conversion API is unavailable.
+  }
+
+  return "UTC"
+}
+
+function _ai_docker_should_use_host_network {
+  $raw = $env:AI_DOCKER_USE_HOST_NETWORK
+  if ([string]::IsNullOrWhiteSpace($raw)) {
+    return $false
+  }
+
+  switch -Regex ($raw) {
+    '^(1|true|yes)$' { return $true }
+    '^(0|false|no)$' { return $false }
+    default { return $false }
+  }
+}
+
+function _ai_docker_set_title {
+  param(
+    [Parameter(Mandatory = $true)][string]$ToolName,
+    [Parameter(Mandatory = $true)][string]$WorkspacePath
+  )
+
+  if ($script:AI_DOCKER_TERM_TITLE_ENABLE -ne "1") {
+    return
+  }
+
+  $workspaceLeaf = Split-Path -Leaf $WorkspacePath
+  if ([string]::IsNullOrWhiteSpace($workspaceLeaf)) {
+    $workspaceLeaf = "workspace"
+  }
+
+  try {
+    $host.UI.RawUI.WindowTitle = "$ToolName+$workspaceLeaf"
+  } catch {
+    # Ignore title update issues in non-interactive hosts.
+  }
+}
+
+function _ai_docker_run_container {
+  param(
+    [Parameter(Mandatory = $true)][string]$ImageName,
+    [Parameter(Mandatory = $true)][string]$EnvFile,
+    [Parameter(Mandatory = $true)][string[]]$VolumeMounts,
+    [Parameter(Mandatory = $true)][string]$WorkspacePath,
+    [Parameter(Mandatory = $true)][hashtable]$EnvironmentVariables,
+    [Parameter(Mandatory = $true)][string[]]$CommandArgs,
+    [switch]$UseHostNetwork
+  )
+
+  $workspaceLeaf = Split-Path -Leaf $WorkspacePath
+  if ([string]::IsNullOrWhiteSpace($workspaceLeaf)) {
+    $workspaceLeaf = "workspace"
+  }
+
+  $tzValue = _ai_docker_get_tz
+
+  $dockerArgs = @(
+    'run', '--rm', '-it',
+    '--env-file', $EnvFile,
+    '--entrypoint', '/bin/bash'
+  )
+
+  if ($UseHostNetwork) {
+    $dockerArgs += '--network=host'
+  }
+
+  foreach ($mount in $VolumeMounts) {
+    $dockerArgs += '-v'
+    $dockerArgs += $mount
+  }
+
+  $dockerArgs += '-v'
+  $dockerArgs += "${WorkspacePath}:/workspace/$workspaceLeaf"
+  $dockerArgs += '-w'
+  $dockerArgs += "/workspace/$workspaceLeaf"
+  $dockerArgs += '-e'
+  $dockerArgs += "TZ=$tzValue"
+
+  foreach ($key in $EnvironmentVariables.Keys) {
+    $dockerArgs += '-e'
+    $dockerArgs += "$key=$($EnvironmentVariables[$key])"
+  }
+
+  $dockerArgs += $ImageName
+  $dockerArgs += $CommandArgs
+
+  & docker @dockerArgs
+  return $LASTEXITCODE
+}
+
+function _ai_docker_build_image {
+  param(
+    [Parameter(Mandatory = $true)][string]$ImageName,
+    [Parameter(Mandatory = $true)][string]$DockerfileName,
+    [switch]$NoCache
+  )
+
+  if (-not (Test-Path -LiteralPath $script:AI_DOCKER_REPO_DIR -PathType Container)) {
+    throw "Failed to locate repository directory for docker build."
+  }
+
+  $dockerfilePath = Join-Path $script:AI_DOCKER_REPO_DIR $DockerfileName
+  if (-not (Test-Path -LiteralPath $dockerfilePath -PathType Leaf)) {
+    throw "Dockerfile not found: $dockerfilePath"
+  }
+
+  Write-Host "Building Docker image '$ImageName' from: $script:AI_DOCKER_REPO_DIR ($DockerfileName)"
+
+  $oldImageId = ((& docker images -q $ImageName 2>$null) | Select-Object -First 1)
+
+  $buildArgs = @('build', '--pull')
+  if ($NoCache) {
+    $buildArgs += '--no-cache'
+  }
+  $buildArgs += @('-f', $dockerfilePath, '-t', $ImageName, $script:AI_DOCKER_REPO_DIR)
+
+  & docker @buildArgs
+  if ($LASTEXITCODE -ne 0) {
+    return $LASTEXITCODE
+  }
+
+  if (-not [string]::IsNullOrWhiteSpace($oldImageId)) {
+    $newImageId = ((& docker images -q $ImageName 2>$null) | Select-Object -First 1)
+    if ($oldImageId -and $newImageId -and $oldImageId -ne $newImageId) {
+      Write-Host "Cleaning up previous image version ($oldImageId)..."
+      & docker rmi $oldImageId 2>$null | Out-Null
+    }
+  }
+
+  return 0
+}
+
+function _ai_docker_resolve_no_cache {
+  param(
+    [string[]]$RemainingArgs,
+    [Parameter(Mandatory = $true)][string]$Usage
+  )
+
+  if (-not $RemainingArgs -or $RemainingArgs.Count -eq 0) {
+    return $false
+  }
+
+  if ($RemainingArgs.Count -eq 1 -and $RemainingArgs[0] -eq '--no-cache') {
+    return $true
+  }
+
+  throw "Usage: $Usage"
+}
+
+function codex-docker-build {
+  param(
+    [switch]$NoCache,
+    [Parameter(ValueFromRemainingArguments = $true)][string[]]$RemainingArgs
+  )
+
+  try {
+    if (_ai_docker_resolve_no_cache -RemainingArgs $RemainingArgs -Usage 'codex-docker-build [--no-cache]') {
+      $NoCache = $true
+    }
+    return _ai_docker_build_image -ImageName $script:CODEX_IMAGE_NAME -DockerfileName 'Dockerfile.codex' -NoCache:$NoCache
+  } catch {
+    Write-Error $_
+    return 2
+  }
+}
+
+function gemini-docker-build {
+  param(
+    [switch]$NoCache,
+    [Parameter(ValueFromRemainingArguments = $true)][string[]]$RemainingArgs
+  )
+
+  try {
+    if (_ai_docker_resolve_no_cache -RemainingArgs $RemainingArgs -Usage 'gemini-docker-build [--no-cache]') {
+      $NoCache = $true
+    }
+    return _ai_docker_build_image -ImageName $script:GEMINI_IMAGE_NAME -DockerfileName 'Dockerfile.gemini' -NoCache:$NoCache
+  } catch {
+    Write-Error $_
+    return 2
+  }
+}
+
+function claude-docker-build {
+  param(
+    [switch]$NoCache,
+    [Parameter(ValueFromRemainingArguments = $true)][string[]]$RemainingArgs
+  )
+
+  try {
+    if (_ai_docker_resolve_no_cache -RemainingArgs $RemainingArgs -Usage 'claude-docker-build [--no-cache]') {
+      $NoCache = $true
+    }
+    return _ai_docker_build_image -ImageName $script:CLAUDE_IMAGE_NAME -DockerfileName 'Dockerfile.claude' -NoCache:$NoCache
+  } catch {
+    Write-Error $_
+    return 2
+  }
+}
+
+function opencode-docker-build {
+  param(
+    [switch]$NoCache,
+    [Parameter(ValueFromRemainingArguments = $true)][string[]]$RemainingArgs
+  )
+
+  try {
+    if (_ai_docker_resolve_no_cache -RemainingArgs $RemainingArgs -Usage 'opencode-docker-build [--no-cache]') {
+      $NoCache = $true
+    }
+    return _ai_docker_build_image -ImageName $script:OPENCODE_IMAGE_NAME -DockerfileName 'Dockerfile.opencode' -NoCache:$NoCache
+  } catch {
+    Write-Error $_
+    return 2
+  }
+}
+
+function codex-docker-shell {
+  param([string]$Path)
+
+  try {
+    $cwd = _ai_docker_get_workspace -Path $Path
+  } catch {
+    Write-Error $_
+    return 1
+  }
+
+  _ai_docker_update_recents -PathToAdd $cwd
+  if (-not (_ai_docker_confirm_home_mount -Path $cwd -CommandName 'codex-docker-shell')) {
+    Write-Host "Canceled."
+    return 1
+  }
+
+  _ai_docker_set_title -ToolName 'codex' -WorkspacePath $cwd
+  $workspaceLeaf = Split-Path -Leaf $cwd
+  $envVars = @{
+    TERM = $(if ($env:TERM) { $env:TERM } else { 'xterm-256color' })
+    TMUX_SESSION = $workspaceLeaf
+    AI_NAME = 'codex'
+    AI_COMMAND = 'codex'
+  }
+
+  $runParams = @{
+    ImageName = $script:CODEX_IMAGE_NAME
+    EnvFile = (Join-Path $script:CODEX_CONFIG_PATH 'docker-env.env')
+    VolumeMounts = @("${script:CODEX_CONFIG_PATH}:/root/.codex")
+    WorkspacePath = $cwd
+    EnvironmentVariables = $envVars
+    CommandArgs = @('-lc', 'start-tmux-layout')
+  }
+  return _ai_docker_run_container @runParams
+}
+
+function codex-auth-docker-run {
+  param([string]$Path)
+
+  try {
+    $cwd = _ai_docker_get_workspace -Path $Path
+  } catch {
+    Write-Error $_
+    return 1
+  }
+
+  _ai_docker_update_recents -PathToAdd $cwd
+  if (-not (_ai_docker_confirm_home_mount -Path $cwd -CommandName 'codex-auth-docker-run')) {
+    Write-Host "Canceled."
+    return 1
+  }
+
+  $useHostNetwork = _ai_docker_should_use_host_network
+  if (-not $useHostNetwork) {
+    Write-Host "Info: running codex auth without --network=host."
+    Write-Host "Set AI_DOCKER_USE_HOST_NETWORK=1 to force host networking if your Docker setup supports it."
+  }
+
+  $runParams = @{
+    ImageName = $script:CODEX_IMAGE_NAME
+    EnvFile = (Join-Path $script:CODEX_CONFIG_PATH 'docker-env.env')
+    VolumeMounts = @("${script:CODEX_CONFIG_PATH}:/root/.codex")
+    WorkspacePath = $cwd
+    EnvironmentVariables = @{}
+    UseHostNetwork = $useHostNetwork
+    CommandArgs = @('-c', '. /root/.nvm/nvm.sh && screen codex auth')
+  }
+  return _ai_docker_run_container @runParams
+}
+
+function gemini-docker-shell {
+  param([string]$Path)
+
+  try {
+    $cwd = _ai_docker_get_workspace -Path $Path
+  } catch {
+    Write-Error $_
+    return 1
+  }
+
+  _ai_docker_update_recents -PathToAdd $cwd
+  if (-not (_ai_docker_confirm_home_mount -Path $cwd -CommandName 'gemini-docker-shell')) {
+    Write-Host "Canceled."
+    return 1
+  }
+
+  _ai_docker_set_title -ToolName 'gemini' -WorkspacePath $cwd
+  $workspaceLeaf = Split-Path -Leaf $cwd
+  $envVars = @{
+    TERM = $(if ($env:TERM) { $env:TERM } else { 'xterm-256color' })
+    TMUX_SESSION = $workspaceLeaf
+    AI_NAME = 'gemini'
+    AI_COMMAND = 'gemini'
+  }
+
+  $runParams = @{
+    ImageName = $script:GEMINI_IMAGE_NAME
+    EnvFile = (Join-Path $script:GEMINI_CONFIG_PATH 'docker-env.env')
+    VolumeMounts = @("${script:GEMINI_CONFIG_PATH}:/root/.gemini")
+    WorkspacePath = $cwd
+    EnvironmentVariables = $envVars
+    CommandArgs = @('-lc', 'start-tmux-layout')
+  }
+  return _ai_docker_run_container @runParams
+}
+
+function claude-docker-shell {
+  param([string]$Path)
+
+  try {
+    $cwd = _ai_docker_get_workspace -Path $Path
+  } catch {
+    Write-Error $_
+    return 1
+  }
+
+  _ai_docker_update_recents -PathToAdd $cwd
+  if (-not (_ai_docker_confirm_home_mount -Path $cwd -CommandName 'claude-docker-shell')) {
+    Write-Host "Canceled."
+    return 1
+  }
+
+  _ai_docker_set_title -ToolName 'claude' -WorkspacePath $cwd
+  $workspaceLeaf = Split-Path -Leaf $cwd
+  $envVars = @{
+    TERM = $(if ($env:TERM) { $env:TERM } else { 'xterm-256color' })
+    TMUX_SESSION = $workspaceLeaf
+    AI_NAME = 'claude'
+    AI_COMMAND = 'claude'
+  }
+
+  $runParams = @{
+    ImageName = $script:CLAUDE_IMAGE_NAME
+    EnvFile = (Join-Path $script:CLAUDE_CONFIG_PATH 'docker-env.env')
+    VolumeMounts = @("${script:CLAUDE_CONFIG_PATH}:/root/.claude")
+    WorkspacePath = $cwd
+    EnvironmentVariables = $envVars
+    CommandArgs = @('-lc', 'ln -sf /root/.claude/claude.json /root/.claude.json; start-tmux-layout')
+  }
+  return _ai_docker_run_container @runParams
+}
+
+function opencode-docker-shell {
+  param([string]$Path)
+
+  try {
+    $cwd = _ai_docker_get_workspace -Path $Path
+  } catch {
+    Write-Error $_
+    return 1
+  }
+
+  _ai_docker_update_recents -PathToAdd $cwd
+  if (-not (_ai_docker_confirm_home_mount -Path $cwd -CommandName 'opencode-docker-shell')) {
+    Write-Host "Canceled."
+    return 1
+  }
+
+  _ai_docker_set_title -ToolName 'opencode' -WorkspacePath $cwd
+  $workspaceLeaf = Split-Path -Leaf $cwd
+  $envVars = @{
+    TERM = $(if ($env:TERM) { $env:TERM } else { 'xterm-256color' })
+    TMUX_SESSION = $workspaceLeaf
+    AI_NAME = 'opencode'
+    AI_COMMAND = 'opencode'
+    PATH = '/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin'
+  }
+
+  $runParams = @{
+    ImageName = $script:OPENCODE_IMAGE_NAME
+    EnvFile = (Join-Path $script:OPENCODE_DOCKER_DIR 'docker-env.env')
+    VolumeMounts = @(
+      "${script:OPENCODE_DOCKER_DIR}/local:/root/.local",
+      "${script:OPENCODE_DOCKER_DIR}/config:/root/.config/opencode"
+    )
+    WorkspacePath = $cwd
+    EnvironmentVariables = $envVars
+    CommandArgs = @('-lc', 'start-tmux-layout')
+  }
+  return _ai_docker_run_container @runParams
+}
+
+function docker-ai-build-all {
+  $steps = @(
+    { codex-docker-build -NoCache },
+    { gemini-docker-build -NoCache },
+    { opencode-docker-build -NoCache },
+    { claude-docker-build -NoCache }
+  )
+
+  foreach ($step in $steps) {
+    $result = & $step
+    if ($result -ne 0) {
+      return [int]$result
+    }
+  }
+
+  return 0
+}
+
+function ai-docker {
+  param([string]$Workspace)
+
+  $menuPath = Join-Path $script:AI_DOCKER_REPO_DIR 'ai-docker.ps1'
+  if (-not (Test-Path -LiteralPath $menuPath -PathType Leaf)) {
+    Write-Error "ai-docker.ps1 not found in $script:AI_DOCKER_REPO_DIR"
+    return 1
+  }
+
+  if ([string]::IsNullOrWhiteSpace($Workspace)) {
+    & $menuPath
+  } else {
+    & $menuPath -Workspace $Workspace
+  }
+
+  return $LASTEXITCODE
+}
+
+function ai-docker-deactivate {
+  foreach ($name in @(
+    '_ai_docker_ensure_dir', '_ai_docker_ensure_file', '_ai_docker_resolve_dir',
+    '_ai_docker_update_recents', '_ai_docker_get_workspace', '_ai_docker_is_home_path',
+    '_ai_docker_confirm_home_mount', '_ai_docker_get_tz', '_ai_docker_should_use_host_network',
+    '_ai_docker_set_title', '_ai_docker_run_container', '_ai_docker_build_image',
+    '_ai_docker_resolve_no_cache',
+    'codex-docker-build', 'codex-docker-shell', 'codex-auth-docker-run',
+    'gemini-docker-build', 'gemini-docker-shell',
+    'claude-docker-build', 'claude-docker-shell',
+    'opencode-docker-build', 'opencode-docker-shell',
+    'docker-ai-build-all', 'ai-docker', 'ai-docker-deactivate'
+  )) {
+    if (Get-Command $name -ErrorAction SilentlyContinue) {
+      Remove-Item "Function:$name" -ErrorAction SilentlyContinue
+    }
+  }
+}
