@@ -16,24 +16,226 @@ GEMINI_IMAGE_NAME="my-gemini-image"
 CLAUDE_IMAGE_NAME="my-claude-image"
 OPENCODE_IMAGE_NAME="my-opencode-image"
 
-CODEX_CONFIG_PATH="$HOME/.codex-docker-config"
-GEMINI_CONFIG_PATH="$HOME/.gemini-cli-docker-config"
-CLAUDE_CONFIG_PATH="$HOME/.claude-docker-config"
-OPENCODE_DOCKER_DIR="$HOME/.opencode-docker"
+if [ -n "${AI_DOCKER_PROFILE-}" ] && [ -z "${AI_DOCKER_PROFILE_ENV_OVERRIDE-}" ]; then
+  export AI_DOCKER_PROFILE_ENV_OVERRIDE="$AI_DOCKER_PROFILE"
+fi
 
-for dir in \
-  "$CODEX_CONFIG_PATH" \
-  "$GEMINI_CONFIG_PATH" \
-  "$CLAUDE_CONFIG_PATH" \
-  "$OPENCODE_DOCKER_DIR"
-do
-  mkdir -p "$dir"
-  touch "$dir/docker-env.env"
-  if [ "$dir" = "$CLAUDE_CONFIG_PATH" ]; then
-    touch "$dir/claude.json"
+_ai_docker_migrate_legacy() {
+  local old_ignore_dir="$HOME/.ai-docker-ignore"
+  local new_profiles_dir="$HOME/.ai-docker-profiles"
+  if [ -d "$old_ignore_dir" ] && [ ! -d "$new_profiles_dir" ]; then
+    mv "$old_ignore_dir" "$new_profiles_dir"
   fi
-done
-mkdir -p "$OPENCODE_DOCKER_DIR/local" "$OPENCODE_DOCKER_DIR/config"
+
+  local legacy_codex="$HOME/.codex-docker-config"
+  local legacy_gemini="$HOME/.gemini-cli-docker-config"
+  local legacy_claude="$HOME/.claude-docker-config"
+  local legacy_opencode="$HOME/.opencode-docker"
+  local legacy_recents="$HOME/.ai-docker-recents"
+
+  local target_dir="$HOME/.ai-docker-profiles/default"
+
+  # Helper to migrate directory
+  migrate_dir() {
+    local src="$1"
+    local dest="$2"
+    if [ -d "$src" ]; then
+      mkdir -p "$(dirname "$dest")"
+      if [ ! -d "$dest" ]; then
+        mv "$src" "$dest"
+      else
+        # Target exists, merge files
+        for f in "$src"/* "$src"/.*; do
+          [ "$(basename "$f")" = "." ] && continue
+          [ "$(basename "$f")" = ".." ] && continue
+          [ -e "$f" ] || continue
+          mv "$f" "$dest/"
+        done
+        rmdir "$src" 2>/dev/null || rm -rf "$src"
+      fi
+    fi
+  }
+
+  # Migrate recents file
+  if [ -f "$legacy_recents" ]; then
+    mkdir -p "$target_dir"
+    mv "$legacy_recents" "$target_dir/ai-docker-recents"
+  elif [ -d "$legacy_recents" ]; then
+    mkdir -p "$target_dir"
+    if [ -f "$legacy_recents/recents" ]; then
+      mv "$legacy_recents/recents" "$target_dir/ai-docker-recents"
+    elif [ -f "$legacy_recents/ai-docker-recents" ]; then
+      mv "$legacy_recents/ai-docker-recents" "$target_dir/ai-docker-recents"
+    fi
+    rm -rf "$legacy_recents"
+  fi
+
+  migrate_dir "$legacy_codex" "$target_dir/codex-docker-config"
+  migrate_dir "$legacy_gemini" "$target_dir/gemini-cli-docker-config"
+  migrate_dir "$legacy_claude" "$target_dir/claude-docker-config"
+  migrate_dir "$legacy_opencode" "$target_dir/opencode-docker"
+}
+
+_ai_docker_get_project_profile() {
+  local target_path="$1"
+  local map_file="$HOME/.ai-docker-profiles/project-profiles"
+  if [ -f "$map_file" ]; then
+    local resolved_target
+    resolved_target=$(cd "$target_path" 2>/dev/null && pwd || echo "$target_path")
+    while IFS= read -r line || [ -n "$line" ]; do
+      [[ "$line" =~ ^# ]] && continue
+      [ -z "$line" ] && continue
+      local p_path="${line%:*}"
+      local p_profile="${line##*:}"
+      if [ "$p_path" = "$resolved_target" ]; then
+        echo "$p_profile"
+        return 0
+      fi
+    done < "$map_file"
+  fi
+  return 0
+}
+
+_ai_docker_set_project_profile() {
+  local target_path="$1"
+  local profile_name="$2"
+  local map_file="$HOME/.ai-docker-profiles/project-profiles"
+  mkdir -p "$(dirname "$map_file")"
+  
+  local resolved_target
+  resolved_target=$(cd "$target_path" 2>/dev/null && pwd || echo "$target_path")
+
+  local tmp_file="${map_file}.tmp"
+  local found=0
+  if [ -f "$map_file" ]; then
+    while IFS= read -r line || [ -n "$line" ]; do
+      if [ -n "$line" ]; then
+        local p_path="${line%:*}"
+        if [ "$p_path" = "$resolved_target" ]; then
+          if [ -n "$profile_name" ]; then
+            echo "${resolved_target}:${profile_name}" >> "$tmp_file"
+          fi
+          found=1
+        else
+          echo "$line" >> "$tmp_file"
+        fi
+      fi
+    done < "$map_file"
+  fi
+
+  if [ "$found" -eq 0 ] && [ -n "$profile_name" ]; then
+    echo "${resolved_target}:${profile_name}" >> "$tmp_file"
+  fi
+
+  if [ -f "$tmp_file" ]; then
+    mv "$tmp_file" "$map_file"
+  else
+    > "$map_file"
+  fi
+}
+
+_ai_docker_load_profile() {
+  local target_profile="${1-}"
+  local directory="${2-}"
+
+  # Migrate legacy config paths
+  _ai_docker_migrate_legacy
+
+  if [ -n "$target_profile" ]; then
+    AI_DOCKER_PROFILE="$target_profile"
+  fi
+
+  if [ -z "${AI_DOCKER_PROFILE-}" ]; then
+    if [ -n "${AI_DOCKER_PROFILE_ENV_OVERRIDE-}" ]; then
+      AI_DOCKER_PROFILE="$AI_DOCKER_PROFILE_ENV_OVERRIDE"
+    else
+      # Check directory mapping
+      local check_dir="${directory:-$(pwd)}"
+      local resolved_dir
+      resolved_dir=$(cd "$check_dir" 2>/dev/null && pwd || echo "$check_dir")
+      
+      local mapped_profile=""
+      if [ -n "$resolved_dir" ]; then
+        mapped_profile=$(_ai_docker_get_project_profile "$resolved_dir" || true)
+      fi
+
+      if [ -n "$mapped_profile" ]; then
+        AI_DOCKER_PROFILE="$mapped_profile"
+      else
+        local active_profile_file="$HOME/.ai-docker-active-profile"
+        if [ -f "$active_profile_file" ]; then
+          AI_DOCKER_PROFILE="$(cat "$active_profile_file" | tr -d '\r\n[:space:]')"
+        else
+          AI_DOCKER_PROFILE="default"
+        fi
+      fi
+    fi
+  fi
+
+  AI_DOCKER_PROFILE="${AI_DOCKER_PROFILE:-default}"
+
+  local profile_dir="$HOME/.ai-docker-profiles/$AI_DOCKER_PROFILE"
+  CODEX_CONFIG_PATH="$profile_dir/codex-docker-config"
+  GEMINI_CONFIG_PATH="$profile_dir/gemini-cli-docker-config"
+  CLAUDE_CONFIG_PATH="$profile_dir/claude-docker-config"
+  OPENCODE_DOCKER_DIR="$profile_dir/opencode-docker"
+  AI_DOCKER_RECENTS_FILE="$profile_dir/ai-docker-recents"
+
+  for dir in \
+    "$CODEX_CONFIG_PATH" \
+    "$GEMINI_CONFIG_PATH" \
+    "$CLAUDE_CONFIG_PATH" \
+    "$OPENCODE_DOCKER_DIR"
+  do
+    mkdir -p "$dir"
+    touch "$dir/docker-env.env"
+    if [ "$dir" = "$CLAUDE_CONFIG_PATH" ]; then
+      touch "$dir/claude.json"
+    fi
+  done
+  mkdir -p "$OPENCODE_DOCKER_DIR/local" "$OPENCODE_DOCKER_DIR/config"
+}
+
+_ai_docker_load_profile "" "$(pwd)"
+
+ai-docker-profile() {
+  local target="${1-}"
+  if [ -z "$target" ]; then
+    echo "Current profile: ${AI_DOCKER_PROFILE:-default}"
+    echo "Available profiles:"
+    echo "  default"
+    local ignore_dir="$HOME/.ai-docker-profiles"
+    if [ -d "$ignore_dir" ]; then
+      for d in "$ignore_dir"/*; do
+        if [ -d "$d" ]; then
+          local name
+          name=$(basename "$d")
+          if [ "$name" != "default" ] && [ "$name" != "project-profiles" ]; then
+            echo "  $name"
+          fi
+        fi
+      done
+    fi
+    return 0
+  fi
+
+  local sanitized
+  sanitized=$(echo "$target" | tr -cd 'a-zA-Z0-9_-')
+  if [ "$sanitized" != "$target" ] || [ -z "$target" ]; then
+    echo "Error: Invalid profile name. Only alphanumeric, dashes, and underscores are allowed." >&2
+    return 1
+  fi
+
+  echo "$target" > "$HOME/.ai-docker-active-profile"
+  _ai_docker_load_profile "$target"
+  
+  if [ "$(pwd)" != "$HOME" ]; then
+    _ai_docker_set_project_profile "$(pwd)" "$target"
+    echo "Profile '$target' activated and mapped to current directory."
+  else
+    echo "Profile '$target' activated globally."
+  fi
+}
 
 
 AI_DOCKER_TERM_TITLE_ENABLE="${AI_DOCKER_TERM_TITLE_ENABLE:-${CODEX_ITERM_TITLE_ENABLE:-1}}" # Control whether iTerm/tab title tweaks are applied (default: on). Set to "0" to disable.
@@ -54,8 +256,6 @@ else
   AI_DOCKER_REPO_DIR="$(cd "$(dirname "$_ai_docker_script_path")" 2>/dev/null && pwd)"
 fi
 unset _ai_docker_script_path
-
-AI_DOCKER_RECENTS_FILE="$HOME/.ai-docker-recents"
 
 _ai_docker_update_recents() {
   local path_to_add="$1"
@@ -216,6 +416,7 @@ codex-docker-shell() {
     cwd="$(pwd)"
   fi
 
+  _ai_docker_load_profile "" "$cwd"
   _ai_docker_update_recents "$cwd"
 
   if [ "$cwd" = "$HOME" ]; then
@@ -263,6 +464,7 @@ codex-docker-shell() {
     -e "TZ=${tz_value}"
     -e "TERM=${TERM:-xterm-256color}"
     -e "TMUX_SESSION=${workspace_name}"
+    -e "AI_DOCKER_PROFILE=${AI_DOCKER_PROFILE}"
     -e AI_NAME=codex
     -e AI_COMMAND=codex
     "$CODEX_IMAGE_NAME"
@@ -284,6 +486,7 @@ codex-auth-docker-run() {
     cwd="$(pwd)"
   fi
 
+  _ai_docker_load_profile "" "$cwd"
   _ai_docker_update_recents "$cwd"
 
   if [ "$cwd" = "$HOME" ]; then
@@ -367,6 +570,7 @@ gemini-docker-shell() {
     cwd="$(pwd)"
   fi
 
+  _ai_docker_load_profile "" "$cwd"
   _ai_docker_update_recents "$cwd"
 
   if [ "$cwd" = "$HOME" ]; then
@@ -414,6 +618,7 @@ gemini-docker-shell() {
     -e "TZ=${tz_value}"
     -e "TERM=${TERM:-xterm-256color}"
     -e "TMUX_SESSION=${workspace_name}"
+    -e "AI_DOCKER_PROFILE=${AI_DOCKER_PROFILE}"
     -e AI_NAME=gemini
     -e AI_COMMAND=gemini
     "$GEMINI_IMAGE_NAME"
@@ -466,6 +671,7 @@ claude-docker-shell() {
     cwd="$(pwd)"
   fi
 
+  _ai_docker_load_profile "" "$cwd"
   _ai_docker_update_recents "$cwd"
 
   if [ "$cwd" = "$HOME" ]; then
@@ -513,6 +719,7 @@ claude-docker-shell() {
     -e "TZ=${tz_value}"
     -e "TERM=${TERM:-xterm-256color}"
     -e "TMUX_SESSION=${workspace_name}"
+    -e "AI_DOCKER_PROFILE=${AI_DOCKER_PROFILE}"
     -e AI_NAME=claude
     -e AI_COMMAND=claude
     "$CLAUDE_IMAGE_NAME"
@@ -572,6 +779,7 @@ opencode-docker-shell() {
     cwd="$(pwd)"
   fi
 
+  _ai_docker_load_profile "" "$cwd"
   _ai_docker_update_recents "$cwd"
 
   if [ "$cwd" = "$HOME" ]; then
@@ -620,6 +828,7 @@ opencode-docker-shell() {
     -e "TZ=${tz_value}"
     -e "TERM=${TERM:-xterm-256color}"
     -e "TMUX_SESSION=${workspace_name}"
+    -e "AI_DOCKER_PROFILE=${AI_DOCKER_PROFILE}"
     -e AI_NAME=opencode
     -e AI_COMMAND=opencode
     -e PATH=/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin
@@ -632,7 +841,11 @@ opencode-docker-shell() {
 
 ai-docker() {
   if [ -x "$AI_DOCKER_REPO_DIR/ai-docker.sh" ]; then
+    _ai_docker_load_profile "" "$(pwd)"
     "$AI_DOCKER_REPO_DIR/ai-docker.sh" "$@"
+    local exit_code=$?
+    _ai_docker_load_profile "" "$(pwd)"
+    return $exit_code
   else
     echo "Error: ai-docker.sh not found or not executable in $AI_DOCKER_REPO_DIR" >&2
     return 1
@@ -640,5 +853,5 @@ ai-docker() {
 }
 
 ai-docker-deactivate() {
-  unset -f _ai_docker_update_recents _ai_docker_is_linux_host _ai_docker_should_mount_localtime _ai_docker_detect_tz _ai_docker_should_use_host_network codex-docker-build codex-docker-shell codex-auth-docker-run gemini-docker-build gemini-docker-shell claude-docker-build claude-docker-shell opencode-docker-build opencode-docker-shell docker-ai-build-all ai-docker ai-docker-deactivate
+  unset -f _ai_docker_migrate_legacy _ai_docker_get_project_profile _ai_docker_set_project_profile _ai_docker_load_profile ai-docker-profile _ai_docker_update_recents _ai_docker_is_linux_host _ai_docker_should_mount_localtime _ai_docker_detect_tz _ai_docker_should_use_host_network codex-docker-build codex-docker-shell codex-auth-docker-run gemini-docker-build gemini-docker-shell claude-docker-build claude-docker-shell opencode-docker-build opencode-docker-shell docker-ai-build-all ai-docker ai-docker-deactivate
 }

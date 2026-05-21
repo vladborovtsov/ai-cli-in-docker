@@ -97,9 +97,9 @@ More tmux docs:
 - `man tmux`
 
 ### Make more room for the session name in tmux status bar
-By default, tmux truncates the left status text. This setup increases it to 32 characters.
-- One-off run: `TMUX_STATUS_LEFT_LENGTH=50 gemini-docker-shell`
-- Persist for current shell session: `export TMUX_STATUS_LEFT_LENGTH=50`
+By default, tmux truncates the left status text. This setup increases the default status-left length to 60 characters and displays the active profile alongside the session name (e.g. `workspace (default)`).
+- One-off run: `TMUX_STATUS_LEFT_LENGTH=80 gemini-docker-shell`
+- Persist for current shell session: `export TMUX_STATUS_LEFT_LENGTH=80`
 
 ### Persist activation in shell profile
 Add activation to your shell profile so helpers are available in new terminals.
@@ -129,28 +129,40 @@ Reload profile:
 - Zsh: `source ~/.zshrc`
 - PowerShell: `. $PROFILE`
 
-### Where AI tools store auth/config
-- Codex:
-  - Host: `~/.codex-docker-config`
+### Profiles and Configuration Storage
+The CLI supports multiple isolated profiles. Only `default` is pre-defined, but you can create additional profiles (e.g., `personal`, `work`). Each profile isolates auth, configs, recent workspace paths, and environment files under:
+`~/.ai-docker-profiles/<profile-name>/`
+
+Specifically, for the active profile:
+- **Codex**:
+  - Host: `~/.ai-docker-profiles/<profile>/codex-docker-config`
   - Container: `/root/.codex`
-- Gemini:
-  - Host: `~/.gemini-cli-docker-config`
+- **Gemini**:
+  - Host: `~/.ai-docker-profiles/<profile>/gemini-cli-docker-config`
   - Container: `/root/.gemini`
-- Claude:
-  - Host: `~/.claude-docker-config`
+- **Claude**:
+  - Host: `~/.ai-docker-profiles/<profile>/claude-docker-config`
   - Container: `/root/.claude`
   - `/root/.claude.json` is symlinked to `/root/.claude/claude.json`
-- OpenCode:
-  - Host: `~/.opencode-docker/local` -> Container: `/root/.local`
-  - Host: `~/.opencode-docker/config` -> Container: `/root/.config/opencode`
-  - Host: `~/.opencode-docker/docker-env.env` -> Container environment variables
+- **OpenCode**:
+  - Host: `~/.ai-docker-profiles/<profile>/opencode-docker/local` -> Container: `/root/.local`
+  - Host: `~/.ai-docker-profiles/<profile>/opencode-docker/config` -> Container: `/root/.config/opencode`
+  - Host: `~/.ai-docker-profiles/<profile>/opencode-docker/docker-env.env` -> Container environment variables
 
 Each host config directory includes a `docker-env.env` file that is passed to the container.
+
+#### Managing Profiles
+- **Switching Profiles via TUI**: Select `👤 Switch Active Profile` on the main screen to change profiles or create a new one.
+- **Environment Override**: Set the `AI_DOCKER_PROFILE` environment variable in your terminal session to override the active profile:
+  ```bash
+  export AI_DOCKER_PROFILE=work
+  ```
+- **Active Profile File**: If `AI_DOCKER_PROFILE` is not set, the active profile defaults to the name stored in `~/.ai-docker-active-profile`, and falls back to `default` if the file doesn't exist.
 
 ### Passing environment variables
 Add environment variables to the tool's `docker-env.env` file.
 
-Example for Claude (`~/.claude-docker-config/docker-env.env`):
+Example for Claude (`~/.ai-docker-profiles/<profile>/claude-docker-config/docker-env.env`):
 ```env
 ANTHROPIC_BASE_URL=http://host.docker.internal:1234
 ANTHROPIC_AUTH_TOKEN=lm

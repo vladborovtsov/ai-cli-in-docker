@@ -1,4 +1,4 @@
-﻿param(
+param(
   [string]$Workspace
 )
 
@@ -16,6 +16,28 @@ if (-not (Test-Path -LiteralPath $activatePath -PathType Leaf)) {
 
 . $activatePath
 
+function Activate-Workspace {
+  param([string]$targetPath)
+  if ([string]::IsNullOrWhiteSpace($targetPath) -or -not (Test-Path -LiteralPath $targetPath -PathType Container)) {
+    return
+  }
+  $resolved = _ai_docker_resolve_dir -Path $targetPath
+  $script:AI_DOCKER_ACTIVE_WORKSPACE = $resolved
+  
+  if ($resolved -ne $HOME) {
+    $mapped = _ai_docker_get_project_profile -TargetPath $resolved
+    if (-not [string]::IsNullOrWhiteSpace($mapped)) {
+      $activeProfileFile = Join-Path $HOME ".ai-docker-active-profile"
+      $mapped | Out-File -LiteralPath $activeProfileFile -Force -NoNewline -Encoding utf8
+      _ai_docker_load_profile -TargetProfile $mapped -Directory $resolved
+    } else {
+      $active = if ($script:AI_DOCKER_PROFILE) { $script:AI_DOCKER_PROFILE } else { "default" }
+      _ai_docker_set_project_profile -TargetPath $resolved -ProfileName $active
+      _ai_docker_load_profile -TargetProfile $active -Directory $resolved
+    }
+  }
+}
+
 $launchDir = (Get-Location).Path
 if (-not [string]::IsNullOrWhiteSpace($Workspace)) {
   try {
@@ -28,24 +50,75 @@ if (-not [string]::IsNullOrWhiteSpace($Workspace)) {
   $script:AI_DOCKER_ACTIVE_WORKSPACE = $launchDir
 }
 
+Activate-Workspace $script:AI_DOCKER_ACTIVE_WORKSPACE
 _ai_docker_update_recents -PathToAdd $script:AI_DOCKER_ACTIVE_WORKSPACE
 
 # Main interactive TUI state
 $script:current_menu = "main"
 $script:selected_index = 0
-
-$mainItems = @(
-  "💬 Launch Claude Code",
-  "💬 Launch Gemini CLI",
-  "💬 Launch OpenAI Codex",
-  "💬 Launch OpenCode",
-  "📁 Change Workspace Directory...",
-  "──────────────────────────────────────────────────",
-  "🛠️  Rebuild/Update Images...",
-  "⚙️  Edit Environment Files...",
-  "🧹 Clean up Docker Space...",
-  "🚪 Exit"
+$script:selected_profile_name = ""
+$script:profileActionItems = @(
+  "👉 Activate Profile",
+  "✏️  Rename Profile",
+  "🗑️  Delete Profile",
+  "⬅️  Back to Profile List"
 )
+
+function Get-MainItems {
+  $profile = if ($script:AI_DOCKER_PROFILE) { $script:AI_DOCKER_PROFILE } else { "default" }
+  return @(
+    "💬 Launch Claude Code",
+    "💬 Launch Gemini CLI",
+    "💬 Launch OpenAI Codex",
+    "💬 Launch OpenCode",
+    "📁 Change Workspace Directory...",
+    "👤 Switch Active Profile (Current: $profile)",
+    "──────────────────────────────────────────────────",
+    "🛠️  Rebuild/Update Images...",
+    "⚙️  Edit Environment Files...",
+    "🧹 Clean up Docker Space...",
+    "🚪 Exit"
+  )
+}
+
+function Get-ProfileItems {
+  $names = New-Object System.Collections.Generic.List[string]
+  [void]$names.Add("default")
+
+  $ignoreDir = Join-Path $HOME ".ai-docker-profiles"
+  if (Test-Path -LiteralPath $ignoreDir -PathType Container) {
+    foreach ($d in Get-ChildItem -LiteralPath $ignoreDir -Directory -ErrorAction SilentlyContinue) {
+      $name = $d.Name
+      if (-not $names.Contains($name)) {
+        [void]$names.Add($name)
+      }
+    }
+  }
+
+  $items = New-Object System.Collections.Generic.List[string]
+  $activeProfile = if ($script:AI_DOCKER_PROFILE) { $script:AI_DOCKER_PROFILE } else { "default" }
+  foreach ($name in $names) {
+    if ($name -eq $activeProfile) {
+      [void]$items.Add("👤 $name (Active)")
+    } else {
+      [void]$items.Add("👤 $name")
+    }
+  }
+
+  [void]$items.Add("──────────────────────────────────────────────────")
+  [void]$names.Add("DIVIDER")
+
+  [void]$items.Add("➕ Create New Profile...")
+  [void]$names.Add("CREATE")
+
+  [void]$items.Add("⬅️ Back to Main Menu")
+  [void]$names.Add("BACK")
+
+  return [PSCustomObject]@{
+    Items = $items.ToArray()
+    Names = $names.ToArray()
+  }
+}
 
 $buildItems = @(
   "📦 Claude Code (Dockerfile.claude)",
@@ -115,8 +188,13 @@ function Get-WorkspaceItems {
 
   # 1. Current directory
   $launchDirResolved = _ai_docker_resolve_dir -Path $launchDir
+  $launchProfile = ""
+  if ($launchDirResolved -ne $HOME) {
+    $pProf = _ai_docker_get_project_profile -TargetPath $launchDirResolved
+    $launchProfile = " (profile: " + (if ($pProf) { $pProf } else { "default" }) + ")"
+  }
   $truncatedLaunchDir = Get-TruncatedPath -Path $launchDirResolved -MaxLength $maxPathLen
-  [void]$items.Add("📍 Current Directory: $truncatedLaunchDir")
+  [void]$items.Add("📍 Current Directory: ${truncatedLaunchDir}${launchProfile}")
   [void]$paths.Add($launchDirResolved)
 
   # 2. Custom path option
@@ -138,8 +216,13 @@ function Get-WorkspaceItems {
       }
       $resolved = _ai_docker_resolve_dir -Path $line
       if ($seen.Add($resolved) -and $resolved -ne $launchDirResolved) {
+        $recentProfile = ""
+        if ($resolved -ne $HOME) {
+          $pProf = _ai_docker_get_project_profile -TargetPath $resolved
+          $recentProfile = " (profile: " + (if ($pProf) { $pProf } else { "default" }) + ")"
+        }
         $truncatedRecent = Get-TruncatedPath -Path $resolved -MaxLength $maxPathLen
-        [void]$items.Add("🕒 Recent: $truncatedRecent")
+        [void]$items.Add("🕒 Recent: ${truncatedRecent}${recentProfile}")
         [void]$paths.Add($resolved)
       }
     }
@@ -231,9 +314,10 @@ function Render-Menu {
         $geminiStatus,
         $codexStatus,
         $opencodeStatus,
-        "", "", "", "", "", ""
+        "", "", "", "", "", "", ""
       )
 
+      $mainItems = Get-MainItems
       for ($i = 0; $i -lt $mainItems.Length; $i++) {
         $itemText = $mainItems[$i]
         $isSelected = ($i -eq $selected)
@@ -296,6 +380,35 @@ function Render-Menu {
           } else {
             Write-Host $itemText -ForegroundColor Gray
           }
+        }
+      }
+    }
+
+    "profile" {
+      Write-Host "  Select or change the active profile:" -ForegroundColor Gray
+      $activeProfile = if ($script:AI_DOCKER_PROFILE) { $script:AI_DOCKER_PROFILE } else { "default" }
+      Write-Host "  Current active profile: " -NoNewline
+      Write-Host $activeProfile -ForegroundColor Green
+      Write-Host ""
+
+      $profileMenu = Get-ProfileItems
+      $items = $profileMenu.Items
+
+      for ($i = 0; $i -lt $items.Length; $i++) {
+        $itemText = $items[$i]
+        $isSelected = ($i -eq $selected)
+
+        if ($itemText.StartsWith("──")) {
+          $divLine = "─" * ($insideWidth - 4)
+          Write-Host "  $divLine" -ForegroundColor Gray
+          continue
+        }
+
+        if ($isSelected) {
+          Write-Host "  ▸ " -ForegroundColor Cyan -NoNewline
+          Write-Host $itemText -ForegroundColor White
+        } else {
+          Write-Host "    $itemText" -ForegroundColor Gray
         }
       }
     }
@@ -372,6 +485,22 @@ function Render-Menu {
         }
       }
     }
+
+    "profile_actions" {
+      Write-Host "  Profile Actions for: " -NoNewline
+      Write-Host $script:selected_profile_name -ForegroundColor Green
+      Write-Host ""
+
+      for ($i = 0; $i -lt $script:profileActionItems.Length; $i++) {
+        $isSelected = ($i -eq $selected)
+        if ($isSelected) {
+          Write-Host "  ▸ " -ForegroundColor Cyan -NoNewline
+          Write-Host $script:profileActionItems[$i] -ForegroundColor White
+        } else {
+          Write-Host "    $($script:profileActionItems[$i])" -ForegroundColor Gray
+        }
+      }
+    }
   }
 
   Write-Host ""
@@ -397,22 +526,32 @@ function Move-Selection {
   if ($direction -eq "UP") {
     $script:selected_index = ($script:selected_index - 1 + $len) % $len
     # Skip dividers
-    if ($script:current_menu -eq "main" -and $script:selected_index -eq 5) {
+    if ($script:current_menu -eq "main" -and $script:selected_index -eq 6) {
       $script:selected_index = ($script:selected_index - 1 + $len) % $len
     } elseif ($script:current_menu -eq "workspace") {
       $workspaceMenu = Get-WorkspaceItems
       if ($workspaceMenu.Items[$script:selected_index].StartsWith("──")) {
         $script:selected_index = ($script:selected_index - 1 + $len) % $len
       }
+    } elseif ($script:current_menu -eq "profile") {
+      $profileMenu = Get-ProfileItems
+      if ($profileMenu.Items[$script:selected_index].StartsWith("──")) {
+        $script:selected_index = ($script:selected_index - 1 + $len) % $len
+      }
     }
   } else {
     $script:selected_index = ($script:selected_index + 1) % $len
     # Skip dividers
-    if ($script:current_menu -eq "main" -and $script:selected_index -eq 5) {
+    if ($script:current_menu -eq "main" -and $script:selected_index -eq 6) {
       $script:selected_index = ($script:selected_index + 1) % $len
     } elseif ($script:current_menu -eq "workspace") {
       $workspaceMenu = Get-WorkspaceItems
       if ($workspaceMenu.Items[$script:selected_index].StartsWith("──")) {
+        $script:selected_index = ($script:selected_index + 1) % $len
+      }
+    } elseif ($script:current_menu -eq "profile") {
+      $profileMenu = Get-ProfileItems
+      if ($profileMenu.Items[$script:selected_index].StartsWith("──")) {
         $script:selected_index = ($script:selected_index + 1) % $len
       }
     }
@@ -421,7 +560,12 @@ function Move-Selection {
 
 function Get-MenuLength {
   switch ($script:current_menu) {
-    "main" { return $mainItems.Length }
+    "main" { return (Get-MainItems).Length }
+    "profile" {
+      $profileMenu = Get-ProfileItems
+      return $profileMenu.Items.Length
+    }
+    "profile_actions" { return $script:profileActionItems.Length }
     "build" { return $buildItems.Length }
     "config" { return $configItems.Length }
     "cleanup" { return $cleanupItems.Length }
@@ -433,6 +577,11 @@ function Get-MenuLength {
 }
 
 function Handle-Back {
+  if ($script:current_menu -eq "profile_actions") {
+    $script:current_menu = "profile"
+    $script:selected_index = 0
+    return $false
+  }
   if ($script:current_menu -ne "main") {
     $script:current_menu = "main"
     $script:selected_index = 0
@@ -530,11 +679,247 @@ function Handle-Select {
         2 { Launch-Tool -ImageName $script:CODEX_IMAGE_NAME -BuildFunc { codex-docker-build } -ShellFunc { param($Path) codex-docker-shell -Path $Path } }
         3 { Launch-Tool -ImageName $script:OPENCODE_IMAGE_NAME -BuildFunc { opencode-docker-build } -ShellFunc { param($Path) opencode-docker-shell -Path $Path } }
         4 { $script:current_menu = "workspace"; $script:selected_index = 0 }
-        5 { } # Divider
-        6 { $script:current_menu = "build"; $script:selected_index = 0 }
-        7 { $script:current_menu = "config"; $script:selected_index = 0 }
-        8 { $script:current_menu = "cleanup"; $script:selected_index = 0 }
-        9 { return $true } # Exit
+        5 { $script:current_menu = "profile"; $script:selected_index = 0 }
+        6 { } # Divider
+        7 { $script:current_menu = "build"; $script:selected_index = 0 }
+        8 { $script:current_menu = "config"; $script:selected_index = 0 }
+        9 { $script:current_menu = "cleanup"; $script:selected_index = 0 }
+        10 { return $true } # Exit
+      }
+    }
+    "profile" {
+      $profileMenu = Get-ProfileItems
+      $name = $profileMenu.Names[$script:selected_index]
+      switch ($name) {
+        "CREATE" {
+          [Console]::Clear()
+          Write-Host "Create New Profile" -ForegroundColor White
+          Write-Host "Type a name for the new profile (alphanumeric, dashes, underscores)." -ForegroundColor Gray
+          Write-Host ""
+          $newProfileName = Read-Host "Profile Name"
+          if (-not [string]::IsNullOrWhiteSpace($newProfileName)) {
+            $newProfileName = $newProfileName -replace '[^a-zA-Z0-9_-]', ''
+            if (-not [string]::IsNullOrWhiteSpace($newProfileName)) {
+              $activeProfileFile = Join-Path $HOME ".ai-docker-active-profile"
+              $newProfileName | Out-File -LiteralPath $activeProfileFile -Force -NoNewline -Encoding utf8
+              _ai_docker_load_profile -TargetProfile $newProfileName
+              Write-Host "Profile '$newProfileName' created and activated." -ForegroundColor Green
+            } else {
+              Write-Host "Error: Invalid profile name." -ForegroundColor Red
+            }
+          } else {
+            Write-Host "Cancelled." -ForegroundColor Gray
+          }
+          Start-Sleep -Milliseconds 1500
+          $script:current_menu = "main"
+          $script:selected_index = 5
+        }
+        "DIVIDER" { }
+        "BACK" { [void](Handle-Back) }
+        default {
+          if ($name -eq "default") {
+            $activeProfileFile = Join-Path $HOME ".ai-docker-active-profile"
+            $name | Out-File -LiteralPath $activeProfileFile -Force -NoNewline -Encoding utf8
+            _ai_docker_load_profile -TargetProfile $name -Directory $script:AI_DOCKER_ACTIVE_WORKSPACE
+            if ($script:AI_DOCKER_ACTIVE_WORKSPACE -ne $HOME) {
+              _ai_docker_set_project_profile -TargetPath $script:AI_DOCKER_ACTIVE_WORKSPACE -ProfileName $name
+            }
+            $script:current_menu = "main"
+            $script:selected_index = 5
+          } else {
+            $script:selected_profile_name = $name
+            $script:current_menu = "profile_actions"
+            $script:selected_index = 0
+          }
+        }
+      }
+    }
+    "profile_actions" {
+      switch ($script:selected_index) {
+        0 { # Activate Profile
+          $activeProfileFile = Join-Path $HOME ".ai-docker-active-profile"
+          $script:selected_profile_name | Out-File -LiteralPath $activeProfileFile -Force -NoNewline -Encoding utf8
+          _ai_docker_load_profile -TargetProfile $script:selected_profile_name -Directory $script:AI_DOCKER_ACTIVE_WORKSPACE
+          if ($script:AI_DOCKER_ACTIVE_WORKSPACE -ne $HOME) {
+            _ai_docker_set_project_profile -TargetPath $script:AI_DOCKER_ACTIVE_WORKSPACE -ProfileName $script:selected_profile_name
+          }
+          $script:current_menu = "main"
+          $script:selected_index = 5
+        }
+        1 { # Rename Profile
+          [Console]::Clear()
+          Write-Host "Rename Profile: $script:selected_profile_name" -ForegroundColor White
+          Write-Host "Type a new name for the profile (alphanumeric, dashes, underscores)." -ForegroundColor Gray
+          Write-Host ""
+          $newName = Read-Host "New Name"
+          if (-not [string]::IsNullOrWhiteSpace($newName)) {
+            $newName = $newName -replace '[^a-zA-Z0-9_-]', ''
+            if (-not [string]::IsNullOrWhiteSpace($newName) -and $newName -ne "default") {
+              $oldDir = Join-Path (Join-Path $HOME ".ai-docker-profiles") $script:selected_profile_name
+              $newDir = Join-Path (Join-Path $HOME ".ai-docker-profiles") $newName
+              if (Test-Path -LiteralPath $oldDir -PathType Container) {
+                if (Test-Path -LiteralPath $newDir -PathType Container) {
+                  Write-Host "Error: Profile '$newName' already exists." -ForegroundColor Red
+                  Start-Sleep -Milliseconds 1500
+                } else {
+                  Rename-Item -LiteralPath $oldDir -NewName $newName -Force -ErrorAction Stop
+                  $currentActive = if ($script:AI_DOCKER_PROFILE) { $script:AI_DOCKER_PROFILE } else { "default" }
+                  if ($currentActive -eq $script:selected_profile_name) {
+                    $activeProfileFile = Join-Path $HOME ".ai-docker-active-profile"
+                    $newName | Out-File -LiteralPath $activeProfileFile -Force -NoNewline -Encoding utf8
+                  }
+                  # Update mapping file
+                  $mapFile = Join-Path (Join-Path $HOME ".ai-docker-profiles") "project-profiles"
+                  if (Test-Path -LiteralPath $mapFile -PathType Leaf) {
+                    $tmpMap = "$mapFile.tmp"
+                    $lines = Get-Content -LiteralPath $mapFile -ErrorAction SilentlyContinue
+                    $newLines = [System.Collections.Generic.List[string]]::new()
+                    if ($lines) {
+                      foreach ($line in $lines) {
+                        if ([string]::IsNullOrWhiteSpace($line)) { continue }
+                        $lastColon = $line.LastIndexOf(':')
+                        if ($lastColon -gt 0) {
+                          $pPath = $line.Substring(0, $lastColon)
+                          $pProfile = $line.Substring($lastColon + 1)
+                          if ($pProfile -eq $script:selected_profile_name) {
+                            $newLines.Add("${pPath}:${newName}")
+                          } else {
+                            $newLines.Add($line)
+                          }
+                        } else {
+                          $newLines.Add($line)
+                        }
+                      }
+                    }
+                    if ($newLines.Count -gt 0) {
+                      $newLines | Set-Content -LiteralPath $tmpMap -ErrorAction Stop
+                      Move-Item -LiteralPath $tmpMap -Destination $mapFile -Force -ErrorAction Stop
+                    } else {
+                      if (Test-Path -LiteralPath $mapFile -PathType Leaf) {
+                        Remove-Item -LiteralPath $mapFile -Force -ErrorAction SilentlyContinue
+                      }
+                      New-Item -ItemType File -Path $mapFile -Force | Out-Null
+                    }
+                  }
+                  _ai_docker_load_profile -TargetProfile "" -Directory $script:AI_DOCKER_ACTIVE_WORKSPACE
+                  Write-Host "Profile renamed to '$newName'." -ForegroundColor Green
+                  Start-Sleep -Milliseconds 1500
+                }
+              } else {
+                $currentActive = if ($script:AI_DOCKER_PROFILE) { $script:AI_DOCKER_PROFILE } else { "default" }
+                if ($currentActive -eq $script:selected_profile_name) {
+                  $activeProfileFile = Join-Path $HOME ".ai-docker-active-profile"
+                  $newName | Out-File -LiteralPath $activeProfileFile -Force -NoNewline -Encoding utf8
+                }
+                # Update mapping file
+                $mapFile = Join-Path (Join-Path $HOME ".ai-docker-profiles") "project-profiles"
+                if (Test-Path -LiteralPath $mapFile -PathType Leaf) {
+                  $tmpMap = "$mapFile.tmp"
+                  $lines = Get-Content -LiteralPath $mapFile -ErrorAction SilentlyContinue
+                  $newLines = [System.Collections.Generic.List[string]]::new()
+                  if ($lines) {
+                    foreach ($line in $lines) {
+                      if ([string]::IsNullOrWhiteSpace($line)) { continue }
+                      $lastColon = $line.LastIndexOf(':')
+                      if ($lastColon -gt 0) {
+                        $pPath = $line.Substring(0, $lastColon)
+                        $pProfile = $line.Substring($lastColon + 1)
+                        if ($pProfile -eq $script:selected_profile_name) {
+                          $newLines.Add("${pPath}:${newName}")
+                        } else {
+                          $newLines.Add($line)
+                        }
+                      } else {
+                        $newLines.Add($line)
+                      }
+                    }
+                  }
+                  if ($newLines.Count -gt 0) {
+                    $newLines | Set-Content -LiteralPath $tmpMap -ErrorAction Stop
+                    Move-Item -LiteralPath $tmpMap -Destination $mapFile -Force -ErrorAction Stop
+                  } else {
+                    if (Test-Path -LiteralPath $mapFile -PathType Leaf) {
+                      Remove-Item -LiteralPath $mapFile -Force -ErrorAction SilentlyContinue
+                    }
+                    New-Item -ItemType File -Path $mapFile -Force | Out-Null
+                  }
+                }
+                _ai_docker_load_profile -TargetProfile "" -Directory $script:AI_DOCKER_ACTIVE_WORKSPACE
+                Write-Host "Profile name updated to '$newName'." -ForegroundColor Green
+                Start-Sleep -Milliseconds 1500
+              }
+            } else {
+              Write-Host "Error: Invalid profile name." -ForegroundColor Red
+              Start-Sleep -Milliseconds 1500
+            }
+          } else {
+            Write-Host "Cancelled." -ForegroundColor Gray
+            Start-Sleep -Milliseconds 1000
+          }
+          $script:current_menu = "profile"
+          $script:selected_index = 0
+        }
+        2 { # Delete Profile
+          [Console]::Clear()
+          Write-Host "Delete Profile: $script:selected_profile_name" -ForegroundColor Red
+          Write-Host "Are you sure you want to delete this profile? All settings will be lost." -ForegroundColor Gray
+          Write-Host ""
+          $confirm = Read-Host "Type 'yes' to confirm"
+          if ($confirm -eq "yes") {
+            $oldDir = Join-Path (Join-Path $HOME ".ai-docker-profiles") $script:selected_profile_name
+            if (Test-Path -LiteralPath $oldDir -PathType Container) {
+              Remove-Item -Path $oldDir -Recurse -Force -ErrorAction SilentlyContinue
+            }
+            $currentActive = if ($script:AI_DOCKER_PROFILE) { $script:AI_DOCKER_PROFILE } else { "default" }
+            if ($currentActive -eq $script:selected_profile_name) {
+              $activeProfileFile = Join-Path $HOME ".ai-docker-active-profile"
+              "default" | Out-File -LiteralPath $activeProfileFile -Force -NoNewline -Encoding utf8
+            }
+            # Update mapping file
+            $mapFile = Join-Path (Join-Path $HOME ".ai-docker-profiles") "project-profiles"
+            if (Test-Path -LiteralPath $mapFile -PathType Leaf) {
+              $tmpMap = "$mapFile.tmp"
+              $lines = Get-Content -LiteralPath $mapFile -ErrorAction SilentlyContinue
+              $newLines = [System.Collections.Generic.List[string]]::new()
+              if ($lines) {
+                foreach ($line in $lines) {
+                  if ([string]::IsNullOrWhiteSpace($line)) { continue }
+                  $lastColon = $line.LastIndexOf(':')
+                  if ($lastColon -gt 0) {
+                    $pPath = $line.Substring(0, $lastColon)
+                    $pProfile = $line.Substring($lastColon + 1)
+                    if ($pProfile -ne $script:selected_profile_name) {
+                      $newLines.Add($line)
+                    }
+                  } else {
+                    $newLines.Add($line)
+                  }
+                }
+              }
+              if ($newLines.Count -gt 0) {
+                $newLines | Set-Content -LiteralPath $tmpMap -ErrorAction Stop
+                Move-Item -LiteralPath $tmpMap -Destination $mapFile -Force -ErrorAction Stop
+              } else {
+                if (Test-Path -LiteralPath $mapFile -PathType Leaf) {
+                  Remove-Item -LiteralPath $mapFile -Force -ErrorAction SilentlyContinue
+                }
+                New-Item -ItemType File -Path $mapFile -Force | Out-Null
+              }
+            }
+            _ai_docker_load_profile -TargetProfile "" -Directory $script:AI_DOCKER_ACTIVE_WORKSPACE
+            Write-Host "Profile deleted." -ForegroundColor Green
+            Start-Sleep -Milliseconds 1500
+          } else {
+            Write-Host "Cancelled." -ForegroundColor Gray
+            Start-Sleep -Milliseconds 1000
+          }
+          $script:current_menu = "profile"
+          $script:selected_index = 0
+        }
+        3 { # Back
+          $script:current_menu = "profile"
+          $script:selected_index = 0
+        }
       }
     }
     "build" {
@@ -579,7 +964,7 @@ function Handle-Select {
               $customInput = Join-Path $HOME $customInput.Substring(1).TrimStart('\','/')
             }
             if (Test-Path -LiteralPath $customInput -PathType Container) {
-              $script:AI_DOCKER_ACTIVE_WORKSPACE = _ai_docker_resolve_dir -Path $customInput
+              Activate-Workspace $customInput
               _ai_docker_update_recents -PathToAdd $script:AI_DOCKER_ACTIVE_WORKSPACE
               Write-Host "Active workspace directory set to: $script:AI_DOCKER_ACTIVE_WORKSPACE" -ForegroundColor Green
             } else {
@@ -594,7 +979,7 @@ function Handle-Select {
         "BACK" { [void](Handle-Back) }
         default {
           if (Test-Path -LiteralPath $path -PathType Container) {
-            $script:AI_DOCKER_ACTIVE_WORKSPACE = $path
+            Activate-Workspace $path
             _ai_docker_update_recents -PathToAdd $script:AI_DOCKER_ACTIVE_WORKSPACE
             $script:current_menu = "main"
             $script:selected_index = 0
@@ -665,10 +1050,36 @@ while ($true) {
         '3' { $script:selected_index = 2; if (Handle-Select) { $shouldBreak = $true } }
         '4' { $script:selected_index = 3; if (Handle-Select) { $shouldBreak = $true } }
         '5' { $script:selected_index = 4; if (Handle-Select) { $shouldBreak = $true } }
-        '6' { $script:selected_index = 6; if (Handle-Select) { $shouldBreak = $true } }
+        '6' { $script:selected_index = 5; if (Handle-Select) { $shouldBreak = $true } }
         '7' { $script:selected_index = 7; if (Handle-Select) { $shouldBreak = $true } }
         '8' { $script:selected_index = 8; if (Handle-Select) { $shouldBreak = $true } }
-        '0' { $script:selected_index = 9; if (Handle-Select) { $shouldBreak = $true } }
+        '9' { $script:selected_index = 9; if (Handle-Select) { $shouldBreak = $true } }
+        '0' { $script:selected_index = 10; if (Handle-Select) { $shouldBreak = $true } }
+      }
+    } elseif ($script:current_menu -eq "profile") {
+      $profileMenu = Get-ProfileItems
+      $items = $profileMenu.Items
+      if ($key -eq '1') {
+        $script:selected_index = 0; if (Handle-Select) { $shouldBreak = $true }
+      } elseif ($key -eq '2') {
+        $script:selected_index = 1; if (Handle-Select) { $shouldBreak = $true }
+      } elseif ($key -eq '3') {
+        $script:selected_index = 2; if (Handle-Select) { $shouldBreak = $true }
+      } elseif ($key -eq '0') {
+        $script:selected_index = $items.Length - 1; if (Handle-Select) { $shouldBreak = $true }
+      } else {
+        $digitVal = [int][string]$key
+        $idx = $digitVal - 1
+        if ($idx -ge 0 -and $idx -lt $items.Length - 1 -and -not $items[$idx].StartsWith("──")) {
+          $script:selected_index = $idx; if (Handle-Select) { $shouldBreak = $true }
+        }
+      }
+    } elseif ($script:current_menu -eq "profile_actions") {
+      switch ($key) {
+        '1' { $script:selected_index = 0; if (Handle-Select) { $shouldBreak = $true } }
+        '2' { $script:selected_index = 1; if (Handle-Select) { $shouldBreak = $true } }
+        '3' { $script:selected_index = 2; if (Handle-Select) { $shouldBreak = $true } }
+        '0' { $script:selected_index = 3; if (Handle-Select) { $shouldBreak = $true } }
       }
     } elseif ($script:current_menu -eq "build") {
       switch ($key) {
