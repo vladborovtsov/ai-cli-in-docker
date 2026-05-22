@@ -241,11 +241,11 @@ class TestBashTui(unittest.TestCase):
         proj_dir = os.path.realpath(os.path.join(self.tmp_dir, "mock_project"))
         os.makedirs(proj_dir)
 
-        # Set up a profile mapping: mock_project -> work_blu
+        # Set up a profile mapping: mock_project -> custom_profile
         profiles_dir = os.path.join(self.tmp_dir, ".ai-docker-profiles")
         os.makedirs(profiles_dir, exist_ok=True)
         with open(os.path.join(profiles_dir, "project-profiles"), "w") as f:
-            f.write(f"{proj_dir}:work_blu\n")
+            f.write(f"{proj_dir}:custom_profile\n")
 
         # Launch the TUI from the mock project directory
         master_fd, slave_fd = pty.openpty()
@@ -263,7 +263,7 @@ class TestBashTui(unittest.TestCase):
 
         try:
             # Wait for main menu to render
-            success, clean_output = self.read_until(master_fd, ["[Use ↑/↓ or j/k to navigate", "Profile:   work_blu"], timeout=3.0)
+            success, clean_output = self.read_until(master_fd, ["[Use ↑/↓ or j/k to navigate", "Profile:   custom_profile"], timeout=3.0)
             self.assertTrue(success, f"Main menu did not load correctly. Output: {clean_output}")
 
             # Navigate to Change Workspace Directory (index 4 in main_items)
@@ -276,10 +276,10 @@ class TestBashTui(unittest.TestCase):
             os.write(master_fd, b"\r")
 
             # Wait for workspace menu to render and check for:
-            # "Current: ~/mock_project (profile: work_blu)"
+            # "Current: ~/mock_project (profile: custom_profile)"
             success, clean_output = self.read_until(
                 master_fd,
-                ["Current: ~/mock_project (profile: work_blu)"],
+                ["Current: ~/mock_project (profile: custom_profile)"],
                 timeout=3.0
             )
             self.assertTrue(success, f"Workspace menu did not show the correct profile. Output: {clean_output}")
