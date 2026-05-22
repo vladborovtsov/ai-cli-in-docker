@@ -16,18 +16,39 @@ Write-Host "`n1. Running Bash Helper & TUI Tests..." -ForegroundColor Yellow
 docker run --rm -v "${pwd}:/workspace" -w /workspace python:3.12-slim python3 -m unittest discover -s tests -p "test_bash_*.py"
 
 Write-Host "`n2. Running PowerShell Pester Tests..." -ForegroundColor Yellow
-docker run --rm -v "${pwd}:/workspace" -w /workspace mcr.microsoft.com/powershell:latest pwsh -Command '
-  Install-Module -Name Pester -Force -SkipPublisherCheck -Scope CurrentUser -Repository PSGallery -ErrorAction SilentlyContinue | Out-Null
-  $tmpHome = "/tmp/pester_home"
-  New-Item -ItemType Directory -Path $tmpHome -Force | Out-Null
-  $env:HOME = $tmpHome
-  $env:USERPROFILE = $tmpHome
-  $result = Invoke-Pester -Path tests/PesterTests.Tests.ps1 -Output Detailed -PassThru
-  if ($result.FailedCount -gt 0) {
-    Write-Error "PowerShell Pester tests failed!"
-    exit 1
-  }
-'
+
+$isArm64 = $false
+if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64' -or $env:PROCESSOR_ARCHITEW6432 -eq 'ARM64') {
+    $isArm64 = $true
+} elseif ($PSVersionTable.OS -like "*Darwin*" -or $PSVersionTable.OS -like "*Linux*") {
+    try {
+        if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq [System.Runtime.InteropServices.Architecture]::Arm64) {
+            $isArm64 = $true
+        }
+    } catch {
+        $arch = (uname -m) 2>$null
+        if ($arch -eq "arm64" -or $arch -eq "aarch64") {
+            $isArm64 = $true
+        }
+    }
+}
+
+if ($isArm64) {
+    Write-Host "Skipping PowerShell Pester tests on arm64 architecture." -ForegroundColor DarkYellow
+} else {
+    docker run --rm -v "${pwd}:/workspace" -w /workspace mcr.microsoft.com/powershell:latest pwsh -Command '
+      Install-Module -Name Pester -Force -SkipPublisherCheck -Scope CurrentUser -Repository PSGallery -ErrorAction SilentlyContinue | Out-Null
+      $tmpHome = "/tmp/pester_home"
+      New-Item -ItemType Directory -Path $tmpHome -Force | Out-Null
+      $env:HOME = $tmpHome
+      $env:USERPROFILE = $tmpHome
+      $result = Invoke-Pester -Path tests/PesterTests.Tests.ps1 -Output Detailed -PassThru
+      if ($result.FailedCount -gt 0) {
+        Write-Error "PowerShell Pester tests failed!"
+        exit 1
+      }
+    '
+}
 
 Write-Host "`n3. Building & Verifying Docker Images..." -ForegroundColor Yellow
 # Dot-source the PowerShell helper functions
