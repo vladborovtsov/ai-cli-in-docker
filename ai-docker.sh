@@ -72,25 +72,6 @@ format_path() {
   else
     display="$path"
   fi
-
-  if [ "$display" = "$path" ]; then
-    # Logical match failed. Try physical path matching in case of symlinks.
-    local real_home
-    real_home=$(cd "$HOME" 2>/dev/null && pwd -P || builtin echo "$HOME")
-    local real_path
-    real_path=$(cd "$path" 2>/dev/null && pwd -P || builtin echo "$path")
-    local display_real
-    if [ "$real_path" = "$real_home" ]; then
-      display_real="~"
-    elif [ "${real_path#$real_home/}" != "$real_path" ]; then
-      display_real="~/${real_path#$real_home/}"
-    else
-      display_real="$real_path"
-    fi
-    if [ "$display_real" != "$real_path" ]; then
-      display="$display_real"
-    fi
-  fi
   if [ "${#display}" -gt "$max_len" ]; then
     local half=$(( (max_len - 5) / 2 ))
     display="${display:0:$half}...${display: -half}"
