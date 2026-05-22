@@ -48,13 +48,13 @@ jobs:
           $env:USERPROFILE = $tmpHome
           
           # Run tests inside a sub-process so it picks up the overridden HOME variables at launch, and exit with code 1 if any fail
-          pwsh -Command "
-            \$result = Invoke-Pester -Path tests/PesterTests.Tests.ps1 -Output Detailed -PassThru
-            if (\$result.FailedCount -gt 0) {
-              Write-Error 'Pester tests failed!'
+          pwsh -Command '
+            $result = Invoke-Pester -Path tests/PesterTests.Tests.ps1 -Output Detailed -PassThru
+            if ($result.FailedCount -gt 0) {
+              Write-Error "Pester tests failed!"
               exit 1
             }
-          "
+          '
 
   build-images:
     name: Build & Verify ${{ matrix.tool }} Container
