@@ -179,6 +179,33 @@ If your terminal cannot open it directly:
 ### Known quirk with Gemini CLI
 On first login, Gemini CLI may become unresponsive. Restart it and try again.
 
+## Running Tests
+
+The project includes a comprehensive automated test suite. You can run it locally or let GitHub Actions run it in CI/CD.
+
+### Local Verification
+
+You can execute the test suite locally using Docker. The host machine does not need Python, Pester, or other test tooling installed.
+
+- **On macOS/Linux:**
+  ```bash
+  chmod +x run-tests.sh
+  ./run-tests.sh
+  ```
+- **On Windows (PowerShell):**
+  ```powershell
+  .\run-tests.ps1
+  ```
+
+*Note: The PowerShell Pester test block is automatically skipped when running on ARM64/aarch64 hosts (such as Apple Silicon Mac machines) to prevent Docker/qemu architecture emulation issues.*
+
+### CI/CD Pipeline
+
+On every push or pull request to the `main` or `master` branches, GitHub Actions automatically triggers the `Test Suite` workflow. This workflow:
+1. Runs Python-based Bash helper and TUI navigation tests.
+2. Runs PowerShell Pester helper tests.
+3. Builds and verifies all four AI CLI images (`claude`, `gemini`, `codex`, `opencode`) in parallel.
+
 ## Tips and Tricks
 
 ### How do I insert line breaks in messages?

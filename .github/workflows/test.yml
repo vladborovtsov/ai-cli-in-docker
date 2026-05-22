@@ -1,0 +1,97 @@
+name: Test Suite
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  test-bash:
+    name: Bash Unit & TUI Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run Bash Helper & TUI Tests
+        run: |
+          python3 -m unittest discover -s tests -p "test_bash_*.py"
+
+  test-powershell:
+    name: PowerShell Helper Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install Pester Module
+        shell: pwsh
+        run: |
+          Install-Module -Name Pester -Force -SkipPublisherCheck -Scope CurrentUser -Repository PSGallery
+
+      - name: Run Pester Tests
+        shell: pwsh
+        run: |
+          # Create a temp directory for HOME to isolate tests
+          $tmpHome = Join-Path $env:RUNNER_TEMP "pester_home"
+          New-Item -ItemType Directory -Path $tmpHome -Force | Out-Null
+
+          # Set HOME environment variables for isolated home path lookup in the child pwsh process
+          $env:HOME = $tmpHome
+          $env:USERPROFILE = $tmpHome
+
+          # Run tests inside a sub-process so it picks up the overridden HOME variables at launch, and exit with code 1 if any fail
+          pwsh -Command '
+            $result = Invoke-Pester -Path tests/PesterTests.Tests.ps1 -Output Detailed -PassThru
+            if ($result.FailedCount -gt 0) {
+              Write-Error "Pester tests failed!"
+              exit 1
+            }
+          '
+
+# TODO: Temporarily commented out due to disk space errors on standard GitHub-hosted runners.
+# Set up a self-hosted runner to handle these resource-intensive container builds later.
+#   build-images:
+#     name: Build & Verify ${{ matrix.tool }} Container
+#     runs-on: ubuntu-latest
+#     strategy:
+#       fail-fast: false
+#       matrix:
+#         tool: [claude, gemini, codex, opencode]
+#     steps:
+#       - name: Maximize Build Disk Space
+#         uses: easimon/maximize-build-space@v10
+#         with:
+#           root-reserve-mb: 5120
+#           swap-size-mb: 1024
+#           remove-dotnet: "true"
+#           remove-android: "true"
+#           remove-haskell: "true"
+#           remove-codeql: "true"
+#           remove-docker-images: "false"
+# 
+#       - name: Clean Docker system
+#         run: |
+#           docker system prune -a -f --volumes
+#           df -h
+# 
+#       - name: Checkout Code
+#         uses: actions/checkout@v4
+# 
+#       - name: Mark Verify Script Executable
+#         run: chmod +x tests/verify_container.sh
+# 
+#       - name: Build Docker Image
+#         run: |
+#           bash -c "source ./activate.sh && ${{ matrix.tool }}-docker-build"
+# 
+#       - name: Verify Container Setup
+#         run: |
+#           docker run --rm -v "$(pwd):/workspace" -w /workspace my-${{ matrix.tool }}-image /workspace/tests/verify_container.sh ${{ matrix.tool }}

@@ -254,8 +254,6 @@ function _ai_docker_load_profile {
   _ai_docker_ensure_dir -Path (Join-Path $script:OPENCODE_DOCKER_DIR "config")
 }
 
-_ai_docker_load_profile -TargetProfile "" -Directory (Get-Location).Path
-
 function ai-docker-profile {
   param([string]$Target)
 
@@ -881,3 +879,5 @@ function ai-docker-deactivate {
     }
   }
 }
+
+_ai_docker_load_profile -TargetProfile "" -Directory (Get-Location).Path

@@ -80,3 +80,11 @@ docker/**/tmp/
 *.rar
 scratch/
 
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+
