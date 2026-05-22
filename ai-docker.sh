@@ -64,14 +64,29 @@ repeat_char() {
 format_path() {
   local path="$1"
   local max_len=55
-  local display="${path/#$HOME/~}"
+  local display
+  if [ "$path" = "$HOME" ]; then
+    display="~"
+  elif [ "${path#$HOME/}" != "$path" ]; then
+    display="~/${path#$HOME/}"
+  else
+    display="$path"
+  fi
+
   if [ "$display" = "$path" ]; then
     # Logical match failed. Try physical path matching in case of symlinks.
     local real_home
     real_home=$(cd "$HOME" 2>/dev/null && pwd -P || builtin echo "$HOME")
     local real_path
     real_path=$(cd "$path" 2>/dev/null && pwd -P || builtin echo "$path")
-    local display_real="${real_path/#$real_home/~}"
+    local display_real
+    if [ "$real_path" = "$real_home" ]; then
+      display_real="~"
+    elif [ "${real_path#$real_home/}" != "$real_path" ]; then
+      display_real="~/${real_path#$real_home/}"
+    else
+      display_real="$real_path"
+    fi
     if [ "$display_real" != "$real_path" ]; then
       display="$display_real"
     fi
