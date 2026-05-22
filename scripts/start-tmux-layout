@@ -72,7 +72,11 @@ if ! tmux has-session -t "${TMUX_SESSION}" 2>/dev/null; then
   tmux new-window  -t "${TMUX_SESSION}:" -n shell "/bin/bash -l" || true
   # Third tab: shell
   tmux new-window  -t "${TMUX_SESSION}:" -n shell "/bin/bash -l" || true
-  # Fourth tab: htop
+  # Fourth tab: lazygit (if installed)
+  if command -v lazygit >/dev/null 2>&1; then
+    tmux new-window  -t "${TMUX_SESSION}:" -n lazygit "lazygit" || true
+  fi
+  # Fifth tab: htop
   tmux new-window  -t "${TMUX_SESSION}:" -n htop  "htop" || true
   # Make Codex window active by default (select by name to avoid index issues)
   # (Selection will be done below after configuration.)

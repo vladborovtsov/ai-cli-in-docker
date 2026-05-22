@@ -9,6 +9,10 @@ RUN chmod +x /usr/local/bin/apt-install
 # Install supplementary tools
 RUN apt-install $(cat /usr/local/share/apt-packages-common)
 
+# Install lazygit
+COPY scripts/lazygit-install /usr/local/bin/lazygit-install
+RUN chmod +x /usr/local/bin/lazygit-install && lazygit-install
+
 # Install the Gemini CLI tool globally
 RUN npm install -g @google/gemini-cli
 

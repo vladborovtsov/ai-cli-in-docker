@@ -401,6 +401,8 @@ codex-docker-build() {
         docker rmi "$old_image_id" 2>/dev/null || true
       fi
     fi
+  else
+    return $?
   fi
 }
 
@@ -456,6 +458,12 @@ codex-docker-shell() {
   )
   if _ai_docker_should_mount_localtime; then
     docker_args+=(-v "/etc/localtime:/etc/localtime:ro")
+  fi
+  if [ -f "$HOME/.gitconfig" ]; then
+    docker_args+=(-v "$HOME/.gitconfig:/root/.gitconfig:ro")
+  fi
+  if [ -f "$HOME/.config/git/config" ]; then
+    docker_args+=(-v "$HOME/.config/git/config:/root/.config/git/config:ro")
   fi
   docker_args+=(
     -v "$CODEX_CONFIG_PATH:/root/.codex"
@@ -555,6 +563,8 @@ gemini-docker-build() {
         docker rmi "$old_image_id" 2>/dev/null || true
       fi
     fi
+  else
+    return $?
   fi
 }
 
@@ -611,6 +621,12 @@ gemini-docker-shell() {
   if _ai_docker_should_mount_localtime; then
     docker_args+=(-v "/etc/localtime:/etc/localtime:ro")
   fi
+  if [ -f "$HOME/.gitconfig" ]; then
+    docker_args+=(-v "$HOME/.gitconfig:/root/.gitconfig:ro")
+  fi
+  if [ -f "$HOME/.config/git/config" ]; then
+    docker_args+=(-v "$HOME/.config/git/config:/root/.config/git/config:ro")
+  fi
   docker_args+=(
     -v "$GEMINI_CONFIG_PATH:/root/.gemini"
     -v "${cwd}:/workspace/${workspace_name}"
@@ -656,6 +672,8 @@ claude-docker-build() {
         docker rmi "$old_image_id" 2>/dev/null || true
       fi
     fi
+  else
+    return $?
   fi
 }
 
@@ -712,6 +730,12 @@ claude-docker-shell() {
   if _ai_docker_should_mount_localtime; then
     docker_args+=(-v "/etc/localtime:/etc/localtime:ro")
   fi
+  if [ -f "$HOME/.gitconfig" ]; then
+    docker_args+=(-v "$HOME/.gitconfig:/root/.gitconfig:ro")
+  fi
+  if [ -f "$HOME/.config/git/config" ]; then
+    docker_args+=(-v "$HOME/.config/git/config:/root/.config/git/config:ro")
+  fi
   docker_args+=(
     -v "$CLAUDE_CONFIG_PATH:/root/.claude"
     -v "${cwd}:/workspace/${workspace_name}"
@@ -757,6 +781,8 @@ opencode-docker-build() {
         docker rmi "$old_image_id" 2>/dev/null || true
       fi
     fi
+  else
+    return $?
   fi
 }
 
@@ -819,6 +845,12 @@ opencode-docker-shell() {
   )
   if _ai_docker_should_mount_localtime; then
     docker_args+=(-v "/etc/localtime:/etc/localtime:ro")
+  fi
+  if [ -f "$HOME/.gitconfig" ]; then
+    docker_args+=(-v "$HOME/.gitconfig:/root/.gitconfig:ro")
+  fi
+  if [ -f "$HOME/.config/git/config" ]; then
+    docker_args+=(-v "$HOME/.config/git/config:/root/.config/git/config:ro")
   fi
   docker_args+=(
     -v "$OPENCODE_DOCKER_DIR/local:/root/.local"

@@ -474,6 +474,17 @@ function _ai_docker_run_container {
     $dockerArgs += $mount
   }
 
+  $gitConfig = Join-Path $HOME ".gitconfig"
+  if (Test-Path -LiteralPath $gitConfig -PathType Leaf) {
+    $dockerArgs += '-v'
+    $dockerArgs += "$(_ai_docker_resolve_dir -Path $gitConfig):/root/.gitconfig:ro"
+  }
+  $xdgGit = Join-Path (Join-Path $HOME ".config") "git/config"
+  if (Test-Path -LiteralPath $xdgGit -PathType Leaf) {
+    $dockerArgs += '-v'
+    $dockerArgs += "$(_ai_docker_resolve_dir -Path $xdgGit):/root/.config/git/config:ro"
+  }
+
   $dockerArgs += '-v'
   $dockerArgs += "${WorkspacePath}:/workspace/$workspaceLeaf"
   $dockerArgs += '-w'

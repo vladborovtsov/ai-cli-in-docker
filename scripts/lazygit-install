@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Find latest version
+LAZYGIT_VERSION=$(curl -s "https://api.github.com/repos/jesseduffield/lazygit/releases/latest" | grep -o '"tag_name": "[^"]*' | head -n 1 | cut -d'"' -f4)
+VERSION_NUM=${LAZYGIT_VERSION#v}
+
+# Detect architecture
+arch=$(uname -m)
+if [ "$arch" = "x86_64" ]; then
+  arch_suffix="x86_64"
+elif [ "$arch" = "aarch64" ] || [ "$arch" = "arm64" ]; then
+  arch_suffix="arm64"
+else
+  echo "Warning: Unsupported architecture '$arch'. Defaulting to x86_64." >&2
+  arch_suffix="x86_64"
+fi
+
+echo "Downloading lazygit v${VERSION_NUM} for linux_${arch_suffix}..."
+curl -Lo lazygit.tar.gz "https://github.com/jesseduffield/lazygit/releases/download/${LAZYGIT_VERSION}/lazygit_${VERSION_NUM}_linux_${arch_suffix}.tar.gz"
+tar xf lazygit.tar.gz lazygit
+install lazygit /usr/local/bin/lazygit
+rm lazygit lazygit.tar.gz
+echo "lazygit installation complete."

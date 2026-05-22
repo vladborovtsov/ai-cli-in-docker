@@ -10,6 +10,10 @@ RUN chmod +x /usr/local/bin/apt-install
 RUN apt-install $(cat /usr/local/share/apt-packages-common) \
     ca-certificates
 
+# Install lazygit
+COPY scripts/lazygit-install /usr/local/bin/lazygit-install
+RUN chmod +x /usr/local/bin/lazygit-install && lazygit-install
+
 # Install Claude Code using the provided command
 RUN curl -fsSL https://claude.ai/install.sh | bash
 
