@@ -7,7 +7,7 @@ Describe "PowerShell Helper Functions" {
     Context "TZ and Network Detection" {
         It "Detects TimeZone successfully" {
             $tz = _ai_docker_get_tz
-            $tz.Should.Not.BeNullOrEmpty()
+            $tz | Should -Not -BeNullOrEmpty
         }
 
         It "Parses AI_DOCKER_USE_HOST_NETWORK environment override" {
@@ -52,11 +52,13 @@ Describe "PowerShell Helper Functions" {
             if (Test-Path -LiteralPath $activeProfileFile) {
                 Remove-Item -LiteralPath $activeProfileFile -Force -ErrorAction SilentlyContinue | Out-Null
             }
+            # Re-initialize the default profile directories and files
+            _ai_docker_load_profile -TargetProfile "default" -Directory $HOME
         }
 
         It "Resolves directories correctly" {
             $resolved = _ai_docker_resolve_dir -Path "."
-            $resolved.Should.Not.BeNullOrEmpty()
+            $resolved | Should -Not -BeNullOrEmpty
             
             $nonExistent = "non-existent-dir-12345"
             $resolvedNonExistent = _ai_docker_resolve_dir -Path $nonExistent
