@@ -60,6 +60,18 @@ repeat_char() {
   builtin echo -n "${val// /$char}"
 }
 
+# Helper to format and truncate paths for display
+format_path() {
+  local path="$1"
+  local max_len=55
+  local display="${path/#$HOME/\~}"
+  if [ "${#display}" -gt "$max_len" ]; then
+    local half=$(( (max_len - 5) / 2 ))
+    display="${display:0:$half}...${display: -half}"
+  fi
+  builtin echo "${display}"
+}
+
 # Check if a Docker image is built
 check_image_built() {
   local image_name="$1"
@@ -173,7 +185,9 @@ load_workspace_menu() {
     p_prof=$(_ai_docker_get_project_profile "$launch_dir")
     launch_profile=" (profile: ${p_prof:-default})"
   fi
-  workspace_items+=("📍 Current Directory: ${launch_dir}${launch_profile}")
+  local formatted_launch_dir
+  formatted_launch_dir=$(format_path "$launch_dir")
+  workspace_items+=("📍 Current: ${formatted_launch_dir}${launch_profile}")
   workspace_paths+=("$launch_dir")
 
   # 2. Custom path option
@@ -196,7 +210,9 @@ load_workspace_menu() {
             p_prof=$(_ai_docker_get_project_profile "$resolved")
             r_profile=" (profile: ${p_prof:-default})"
           fi
-          workspace_items+=("🕒 Recent: ${resolved}${r_profile}")
+          local formatted_resolved
+          formatted_resolved=$(format_path "$resolved")
+          workspace_items+=("🕒 Recent: ${formatted_resolved}${r_profile}")
           workspace_paths+=("$resolved")
         fi
       fi
@@ -316,18 +332,15 @@ render_menu() {
   local selected="$1"
   local lines_printed=0
 
-  # Calculate layout widths dynamically based on mount mapping length
+  # Calculate layout widths
   local mount_path="${active_mount_path}"
   local base_dir="${mount_path##*/}"
   if [ -z "$base_dir" ] || [ "$base_dir" = "." ] || [ "$base_dir" = "/" ]; then
     base_dir="project"
   fi
-  local mount_mapping="(mounts: ${mount_path} -> /workspace/${base_dir})"
-  
-  local inside_width=$((48 + ${#mount_mapping}))
-  if [ "$inside_width" -lt 80 ]; then
-    inside_width=80
-  fi
+
+  # Fixed width to fit standard terminals and prevent horizontal layout wrapping
+  local inside_width=80
 
   # Build header borders and title padding dynamically
   local title_text="🤖 AI CLI IN DOCKER - CONTROL TUI"
@@ -346,8 +359,14 @@ render_menu() {
   echo -e "${BOLD}┌${top_border}┐${RESET}"
   echo -e "${BOLD}│${left_spaces}${title_text}${right_spaces}│${RESET}"
   echo -e "${BOLD}└${top_border}┘${RESET}"
+  
+  # Global Context Info (Workspace Path and Profile Name)
+  local formatted_mount_path
+  formatted_mount_path=$(format_path "${mount_path}")
+  echo -e "  ${BOLD}Workspace:${RESET} ${formatted_mount_path} (${base_dir})"
+  echo -e "  ${BOLD}Profile:  ${RESET} ${GREEN}${AI_DOCKER_PROFILE:-default}${RESET}"
   echo ""
-  lines_printed=4
+  lines_printed=7
 
   case "$current_menu" in
     main)
@@ -374,9 +393,9 @@ render_menu() {
         local item_text="${main_items[$i]}"
         if [ "$i" -lt 4 ]; then
           if [ "$i" -eq "$selected" ]; then
-            printf "  ${CYAN}▸${RESET} ${BOLD}%-32s${RESET} %-12s %s\n" "$item_text" "${statuses[$i]}" "$mount_mapping"
+            printf "  ${CYAN}▸${RESET} ${BOLD}%-32s${RESET} %s\n" "$item_text" "${statuses[$i]}"
           else
-            printf "    %-32s %-12s %s\n" "$item_text" "${statuses[$i]}" "$mount_mapping"
+            printf "    %-32s %s\n" "$item_text" "${statuses[$i]}"
           fi
         else
           if [ "$i" -eq "$selected" ]; then
@@ -403,9 +422,8 @@ render_menu() {
 
     profile)
       echo -e "  ${BOLD}Select or change the active profile:${RESET}"
-      echo -e "  Current profile: ${GREEN}${AI_DOCKER_PROFILE:-default}${RESET}"
       echo ""
-      lines_printed=$((lines_printed + 3))
+      lines_printed=$((lines_printed + 2))
 
       load_profile_menu
 
@@ -479,9 +497,8 @@ render_menu() {
 
     workspace)
       echo -e "  ${BOLD}Select or change the active workspace directory:${RESET}"
-      echo -e "  Current active: ${GREEN}${active_mount_path}${RESET}"
       echo ""
-      lines_printed=$((lines_printed + 3))
+      lines_printed=$((lines_printed + 2))
 
       load_workspace_menu
 
@@ -1041,7 +1058,8 @@ while true; do
   CAPTURE_OUTPUT=0
 
   # Calculate menu_lines from the output structure
-  newlines="${FRAME_BUF//[^$'\n']/}"
+  nl=$'\n'
+  newlines="${FRAME_BUF//[^"$nl"]/}"
   menu_lines="${#newlines}"
 
   # Buffer the clear/move and render operations to write them in a single frame
