@@ -64,7 +64,7 @@ repeat_char() {
 format_path() {
   local path="$1"
   local max_len=55
-  local display="${path/#$HOME/\~}"
+  local display="${path/#$HOME/~}"
   if [ "${#display}" -gt "$max_len" ]; then
     local half=$(( (max_len - 5) / 2 ))
     display="${display:0:$half}...${display: -half}"
@@ -117,7 +117,7 @@ CAPTURE_OUTPUT=0
 FRAME_BUF=""
 
 echo() {
-  if [ "${CAPTURE_OUTPUT-0}" -eq 1 ]; then
+  if [ "${CAPTURE_OUTPUT-0}" -eq 1 ] && [ "${BASH_SUBSHELL-0}" -eq 0 ]; then
     local flag_e=0
     local flag_n=0
     local args=()
@@ -158,7 +158,7 @@ echo() {
 }
 
 printf() {
-  if [ "${CAPTURE_OUTPUT-0}" -eq 1 ]; then
+  if [ "${CAPTURE_OUTPUT-0}" -eq 1 ] && [ "${BASH_SUBSHELL-0}" -eq 0 ]; then
     local formatted
     builtin printf -v formatted "$@"
     FRAME_BUF+="$formatted"

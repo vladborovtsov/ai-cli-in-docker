@@ -15,7 +15,7 @@ def strip_ansi(text):
 
 class TestBashTui(unittest.TestCase):
     def setUp(self):
-        self.tmp_dir = tempfile.mkdtemp()
+        self.tmp_dir = os.path.realpath(tempfile.mkdtemp())
         self.old_home = os.environ.get("HOME")
         os.environ["HOME"] = self.tmp_dir
         self.old_profile = os.environ.get("AI_DOCKER_PROFILE")
@@ -227,6 +227,78 @@ class TestBashTui(unittest.TestCase):
                     except OSError:
                         break
                         
+            p.wait(timeout=1.0)
+            self.assertEqual(p.returncode, 0)
+        finally:
+            try:
+                os.close(master_fd)
+            except OSError:
+                pass
+            p.kill()
+
+    def test_workspace_menu_profiles(self):
+        # Create a mock project directory inside the temp home
+        proj_dir = os.path.realpath(os.path.join(self.tmp_dir, "mock_project"))
+        os.makedirs(proj_dir)
+
+        # Set up a profile mapping: mock_project -> work_blu
+        profiles_dir = os.path.join(self.tmp_dir, ".ai-docker-profiles")
+        os.makedirs(profiles_dir, exist_ok=True)
+        with open(os.path.join(profiles_dir, "project-profiles"), "w") as f:
+            f.write(f"{proj_dir}:work_blu\n")
+
+        # Launch the TUI from the mock project directory
+        master_fd, slave_fd = pty.openpty()
+        p = subprocess.Popen(
+            [os.path.join(self.repo_dir, "ai-docker.sh")],
+            stdin=slave_fd,
+            stdout=slave_fd,
+            stderr=slave_fd,
+            close_fds=True,
+            text=True,
+            cwd=proj_dir,
+            env=dict(os.environ, TERM="xterm-256color")
+        )
+        os.close(slave_fd)
+
+        try:
+            # Wait for main menu to render
+            success, clean_output = self.read_until(master_fd, ["[Use ↑/↓ or j/k to navigate", "Profile:   work_blu"], timeout=3.0)
+            self.assertTrue(success, f"Main menu did not load correctly. Output: {clean_output}")
+
+            # Navigate to Change Workspace Directory (index 4 in main_items)
+            # main_items has: 0: Claude, 1: Gemini, 2: Codex, 3: OpenCode, 4: Change Workspace
+            for _ in range(4):
+                os.write(master_fd, b"j")
+                time.sleep(0.1)
+
+            # Hit Enter to open Workspace Submenu
+            os.write(master_fd, b"\r")
+
+            # Wait for workspace menu to render and check for:
+            # "Current: ~/mock_project (profile: work_blu)"
+            success, clean_output = self.read_until(
+                master_fd,
+                ["Current: ~/mock_project (profile: work_blu)"],
+                timeout=3.0
+            )
+            self.assertTrue(success, f"Workspace menu did not show the correct profile. Output: {clean_output}")
+
+            # Hit 'q' to go back, and 'q' to exit
+            os.write(master_fd, b"q")
+            time.sleep(0.1)
+            os.write(master_fd, b"q")
+
+            # Drain output to avoid deadlock
+            start_wait = time.time()
+            while p.poll() is None and (time.time() - start_wait < 2.0):
+                r, _, _ = select.select([master_fd], [], [], 0.05)
+                if master_fd in r:
+                    try:
+                        os.read(master_fd, 1024)
+                    except OSError:
+                        break
+
             p.wait(timeout=1.0)
             self.assertEqual(p.returncode, 0)
         finally:
