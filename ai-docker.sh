@@ -108,13 +108,13 @@ profile_action_items=(
 
 # Image status caching variables
 claude_built=""
-gemini_built=""
+antigravity_built=""
 codex_built=""
 opencode_built=""
 
 update_image_statuses() {
   claude_built=$(check_image_built "$CLAUDE_IMAGE_NAME")
-  gemini_built=$(check_image_built "$GEMINI_IMAGE_NAME")
+  antigravity_built=$(check_image_built "$ANTIGRAVITY_IMAGE_NAME")
   codex_built=$(check_image_built "$CODEX_IMAGE_NAME")
   opencode_built=$(check_image_built "$OPENCODE_IMAGE_NAME")
 }
@@ -234,7 +234,7 @@ load_workspace_menu() {
 load_main_menu() {
   main_items=(
     "💬 Launch Claude Code"
-    "💬 Launch Gemini CLI"
+    "💬 Launch Antigravity CLI"
     "💬 Launch OpenAI Codex"
     "💬 Launch OpenCode"
     "📁 Change Workspace Directory..."
@@ -297,7 +297,7 @@ load_profile_menu() {
 
 build_items=(
   "📦 Claude Code (Dockerfile.claude)"
-  "📦 Gemini CLI   (Dockerfile.gemini)"
+  "📦 Antigravity CLI (Dockerfile.antigravity)"
   "📦 OpenAI Codex (Dockerfile.codex)"
   "📦 OpenCode     (Dockerfile.opencode)"
   "🔄 Rebuild ALL  (No Cache)"
@@ -306,7 +306,7 @@ build_items=(
 
 config_items=(
   "📝 Claude Env   (docker-env.env)"
-  "📝 Gemini Env   (docker-env.env)"
+  "📝 Antigravity Env (docker-env.env)"
   "📝 Codex Env    (docker-env.env)"
   "📝 OpenCode Env (docker-env.env)"
   "⬅️ Back to Main Menu"
@@ -384,7 +384,7 @@ render_menu() {
 
       local statuses=(
         "[$claude_built]"
-        "[$gemini_built]"
+        "[$antigravity_built]"
         "[$codex_built]"
         "[$opencode_built]"
         ""
@@ -689,7 +689,7 @@ run_cleanup() {
       ;;
     remove_all_images)
       echo "Removing all project images..."
-      docker rmi -f "$CLAUDE_IMAGE_NAME" "$GEMINI_IMAGE_NAME" "$CODEX_IMAGE_NAME" "$OPENCODE_IMAGE_NAME" 2>/dev/null || true
+      docker rmi -f "$CLAUDE_IMAGE_NAME" "$ANTIGRAVITY_IMAGE_NAME" "$CODEX_IMAGE_NAME" "$OPENCODE_IMAGE_NAME" 2>/dev/null || true
       ;;
   esac
   # Update cached image statuses
@@ -721,7 +721,7 @@ handle_select() {
     main)
       case "$selected_index" in
         0) launch_tool "$CLAUDE_IMAGE_NAME" claude-docker-build claude-docker-shell ;;
-        1) launch_tool "$GEMINI_IMAGE_NAME" gemini-docker-build gemini-docker-shell ;;
+        1) launch_tool "$ANTIGRAVITY_IMAGE_NAME" antigravity-docker-build antigravity-docker-shell ;;
         2) launch_tool "$CODEX_IMAGE_NAME" codex-docker-build codex-docker-shell ;;
         3) launch_tool "$OPENCODE_IMAGE_NAME" opencode-docker-build opencode-docker-shell ;;
         4) current_menu="workspace"; selected_index=0; force_clear=1 ;;
@@ -941,7 +941,7 @@ handle_select() {
     build)
       case "$selected_index" in
         0) run_build claude-docker-build ;;
-        1) run_build gemini-docker-build ;;
+        1) run_build antigravity-docker-build ;;
         2) run_build codex-docker-build ;;
         3) run_build opencode-docker-build ;;
         4) run_build docker-ai-build-all ;;
@@ -951,7 +951,7 @@ handle_select() {
     config)
       case "$selected_index" in
         0) edit_env_file "$CLAUDE_CONFIG_PATH/docker-env.env" ;;
-        1) edit_env_file "$GEMINI_CONFIG_PATH/docker-env.env" ;;
+        1) edit_env_file "$ANTIGRAVITY_CONFIG_PATH/docker-env.env" ;;
         2) edit_env_file "$CODEX_CONFIG_PATH/docker-env.env" ;;
         3) edit_env_file "$OPENCODE_DOCKER_DIR/docker-env.env" ;;
         4) handle_back ;;

@@ -1,11 +1,11 @@
 ## AI CLI in Docker
 
-Run AI CLI tools (OpenAI Codex, Google Gemini, Claude, OpenCode) inside Docker to keep your host clean while persisting CLI auth and config on your machine.
+Run AI CLI tools (OpenAI Codex, Google Antigravity, Claude, OpenCode) inside Docker to keep your host clean while persisting CLI auth and config on your machine.
 
 ### Contents
 - [Why AI CLI in Docker?](WHY.md): Rationale behind this project.
 - `Dockerfile.codex`: Based on `ghcr.io/openai/codex-universal` with `@openai/codex` preinstalled.
-- `Dockerfile.gemini`: Based on `node:20` with `@google/gemini-cli` preinstalled.
+- `Dockerfile.antigravity`: Based on `ubuntu:24.04` with the Google Antigravity CLI preinstalled.
 - `Dockerfile.claude`: Based on `ubuntu:24.04` with `@anthropic-ai/claude-code` preinstalled.
 - `Dockerfile.opencode`: Based on `ubuntu:24.04` with `opencode-ai` preinstalled.
 - `activate.sh`: Bash/Zsh helper functions.
@@ -34,7 +34,7 @@ ai-docker
 
 4) Or run helpers directly:
 - `claude-docker-shell`
-- `gemini-docker-shell`
+- `antigravity-docker-shell`
 - `codex-docker-shell`
 - `opencode-docker-shell`
 
@@ -58,14 +58,14 @@ ai-docker
 
 4) Or run helpers directly:
 - `claude-docker-shell`
-- `gemini-docker-shell`
+- `antigravity-docker-shell`
 - `codex-docker-shell`
 - `opencode-docker-shell`
 
 ### Available helper commands
 - `ai-docker`: Launch interactive menu (Bash TUI or PowerShell menu).
 - `codex-docker-build` / `codex-docker-shell`
-- `gemini-docker-build` / `gemini-docker-shell`
+- `antigravity-docker-build` / `antigravity-docker-shell`
 - `claude-docker-build` / `claude-docker-shell`
 - `opencode-docker-build` / `opencode-docker-shell`
 - `docker-ai-build-all`: Build all images with no cache.
@@ -75,7 +75,7 @@ ai-docker
 ### What you get when the container starts
 - A tmux session named after your current folder (overridable with `TMUX_SESSION`).
 - Windows:
-  1) AI CLI (active by default): runs `codex`, `gemini`, `claude`, or `opencode`, then keeps shell open.
+  1) AI CLI (active by default): runs `codex`, `agy` (Antigravity), `claude`, or `opencode`, then keeps shell open.
   2) Shell
   3) Shell
   4) `htop`
@@ -98,7 +98,7 @@ More tmux docs:
 
 ### Make more room for the session name in tmux status bar
 By default, tmux truncates the left status text. This setup increases the default status-left length to 60 characters and displays the active profile alongside the session name (e.g. `workspace (default)`).
-- One-off run: `TMUX_STATUS_LEFT_LENGTH=80 gemini-docker-shell`
+- One-off run: `TMUX_STATUS_LEFT_LENGTH=80 antigravity-docker-shell`
 - Persist for current shell session: `export TMUX_STATUS_LEFT_LENGTH=80`
 
 ### Persist activation in shell profile
@@ -137,8 +137,8 @@ Specifically, for the active profile:
 - **Codex**:
   - Host: `~/.ai-docker-profiles/<profile>/codex-docker-config`
   - Container: `/root/.codex`
-- **Gemini**:
-  - Host: `~/.ai-docker-profiles/<profile>/gemini-cli-docker-config`
+- **Antigravity**:
+  - Host: `~/.ai-docker-profiles/<profile>/antigravity-cli-docker-config`
   - Container: `/root/.gemini`
 - **Claude**:
   - Host: `~/.ai-docker-profiles/<profile>/claude-docker-config`
@@ -176,9 +176,6 @@ If your terminal cannot open it directly:
 - Remove line breaks/spaces in a text editor.
 - Open the cleaned URL in your browser.
 
-### Known quirk with Gemini CLI
-On first login, Gemini CLI may become unresponsive. Restart it and try again.
-
 ## Running Tests
 
 The project includes a comprehensive automated test suite. You can run it locally or let GitHub Actions run it in CI/CD.
@@ -204,7 +201,7 @@ You can execute the test suite locally using Docker. The host machine does not n
 On every push or pull request to the `main` or `master` branches, GitHub Actions automatically triggers the `Test Suite` workflow. This workflow:
 1. Runs Python-based Bash helper and TUI navigation tests.
 2. Runs PowerShell Pester helper tests.
-3. Builds and verifies all four AI CLI images (`claude`, `gemini`, `codex`, `opencode`) in parallel.
+3. Builds and verifies all four AI CLI images (`claude`, `antigravity`, `codex`, `opencode`) in parallel.
 
 ## Tips and Tricks
 
@@ -212,12 +209,12 @@ On every push or pull request to the `main` or `master` branches, GitHub Actions
 Use `Ctrl+J` to insert a line break.
 
 Verified in:
-- `gemini cli`
+- `antigravity cli (agy)`
 - `codex cli`
 - `opencode`
 
 ### Additional tips
-- Rebuild after changing a Dockerfile: `codex-docker-build`, `gemini-docker-build`, etc.
+- Rebuild after changing a Dockerfile: `codex-docker-build`, `antigravity-docker-build`, etc.
 - Remove helper functions from current shell: `ai-docker-deactivate`
 
 ### Notes

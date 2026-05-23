@@ -54,7 +54,7 @@ Write-Host "`n3. Building & Verifying Docker Images..." -ForegroundColor Yellow
 # Dot-source the PowerShell helper functions
 . .\activate.ps1
 
-$tools = @('claude', 'gemini', 'codex', 'opencode')
+$tools = @('claude', 'antigravity', 'codex', 'opencode')
 foreach ($tool in $tools) {
     Write-Host "`n   -> Building image for: $tool..." -ForegroundColor Cyan
     & "${tool}-docker-build"

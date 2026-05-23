@@ -34,7 +34,7 @@ echo -e "\n3. Building & Verifying Docker Images..."
 # Source helper functions
 source ./activate.sh
 
-for tool in claude gemini codex opencode; do
+for tool in claude antigravity codex opencode; do
   echo -e "\n   -> Building image for: $tool..."
   "${tool}-docker-build"
   

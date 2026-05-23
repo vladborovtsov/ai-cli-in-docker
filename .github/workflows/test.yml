@@ -64,7 +64,7 @@ jobs:
 #     strategy:
 #       fail-fast: false
 #       matrix:
-#         tool: [claude, gemini, codex, opencode]
+#         tool: [claude, antigravity, codex, opencode]
 #     steps:
 #       - name: Maximize Build Disk Space
 #         uses: easimon/maximize-build-space@v10
