@@ -1,25 +1,28 @@
-# Use Node.js as a base image
-FROM node:20
+FROM ubuntu:24.04
+ENV DEBIAN_FRONTEND=noninteractive
 
 RUN install -d -m 0755 /usr/local/bin
 COPY scripts/apt-install /usr/local/bin/apt-install
 COPY scripts/apt-packages-common /usr/local/share/apt-packages-common
 RUN chmod +x /usr/local/bin/apt-install
 
-# Install supplementary tools
-RUN apt-install $(cat /usr/local/share/apt-packages-common)
+# Install curl and supplementary tools
+RUN apt-install $(cat /usr/local/share/apt-packages-common) \
+    ca-certificates
 
 # Install lazygit
 COPY scripts/lazygit-install /usr/local/bin/lazygit-install
 RUN chmod +x /usr/local/bin/lazygit-install && lazygit-install
 
-# Install the Gemini CLI tool globally
-RUN npm install -g @google/gemini-cli
+# Install the Antigravity CLI tool
+RUN curl -fsSL https://antigravity.google/cli/install.sh | bash
+
+# Add Antigravity to PATH (installed to ~/.local/bin by the script)
+ENV PATH="/root/.local/bin:${PATH}"
 
 # Set the default working directory
 WORKDIR /workspace
 
-# Ensure /usr/local/bin exists
 # Add the tmux layout script into the image
 ADD scripts/start-tmux-layout /usr/local/bin/start-tmux-layout
 RUN chmod +x /usr/local/bin/start-tmux-layout

@@ -3,8 +3,8 @@
 #   source ./activate.sh
 #   codex-docker-build
 #   codex-docker-shell
-#   gemini-docker-build
-#   gemini-docker-shell
+#   antigravity-docker-build
+#   antigravity-docker-shell
 #   opencode-docker-build
 #   opencode-docker-shell
 #   claude-docker-build
@@ -12,7 +12,7 @@
 #   docker-ai-build-all
 
 CODEX_IMAGE_NAME="my-codex-image"
-GEMINI_IMAGE_NAME="my-gemini-image"
+ANTIGRAVITY_IMAGE_NAME="my-antigravity-image"
 CLAUDE_IMAGE_NAME="my-claude-image"
 OPENCODE_IMAGE_NAME="my-opencode-image"
 
@@ -71,7 +71,7 @@ _ai_docker_migrate_legacy() {
   fi
 
   migrate_dir "$legacy_codex" "$target_dir/codex-docker-config"
-  migrate_dir "$legacy_gemini" "$target_dir/gemini-cli-docker-config"
+  migrate_dir "$legacy_gemini" "$target_dir/antigravity-cli-docker-config"
   migrate_dir "$legacy_claude" "$target_dir/claude-docker-config"
   migrate_dir "$legacy_opencode" "$target_dir/opencode-docker"
 }
@@ -176,14 +176,19 @@ _ai_docker_load_profile() {
 
   local profile_dir="$HOME/.ai-docker-profiles/$AI_DOCKER_PROFILE"
   CODEX_CONFIG_PATH="$profile_dir/codex-docker-config"
-  GEMINI_CONFIG_PATH="$profile_dir/gemini-cli-docker-config"
+  ANTIGRAVITY_CONFIG_PATH="$profile_dir/antigravity-cli-docker-config"
   CLAUDE_CONFIG_PATH="$profile_dir/claude-docker-config"
   OPENCODE_DOCKER_DIR="$profile_dir/opencode-docker"
   AI_DOCKER_RECENTS_FILE="$profile_dir/ai-docker-recents"
 
+  # Migrate profile-level config folder if it exists
+  if [ -d "$profile_dir/gemini-cli-docker-config" ] && [ ! -d "$ANTIGRAVITY_CONFIG_PATH" ]; then
+    mv "$profile_dir/gemini-cli-docker-config" "$ANTIGRAVITY_CONFIG_PATH"
+  fi
+
   for dir in \
     "$CODEX_CONFIG_PATH" \
-    "$GEMINI_CONFIG_PATH" \
+    "$ANTIGRAVITY_CONFIG_PATH" \
     "$CLAUDE_CONFIG_PATH" \
     "$OPENCODE_DOCKER_DIR"
   do
@@ -535,7 +540,7 @@ codex-auth-docker-run() {
   docker run "${docker_args[@]}"
 }
 
-gemini-docker-build() {
+antigravity-docker-build() {
   # Accept optional flag: --no-cache
   local no_cache_flag=""
   if [ "${1-}" = "--no-cache" ]; then
@@ -543,21 +548,21 @@ gemini-docker-build() {
     shift
   fi
   if [ -n "${1-}" ]; then
-    echo "Usage: gemini-docker-build [--no-cache]" >&2
+    echo "Usage: antigravity-docker-build [--no-cache]" >&2
     return 2
   fi
   if [ -z "$AI_DOCKER_REPO_DIR" ]; then
     echo "Failed to locate repository directory for docker build." >&2
     return 1
   fi
-  echo "Building Docker image '$GEMINI_IMAGE_NAME' from: $AI_DOCKER_REPO_DIR (Dockerfile.gemini)" >&2
+  echo "Building Docker image '$ANTIGRAVITY_IMAGE_NAME' from: $AI_DOCKER_REPO_DIR (Dockerfile.antigravity)" >&2
   local old_image_id
-  old_image_id=$(docker images -q "$GEMINI_IMAGE_NAME" 2>/dev/null)
+  old_image_id=$(docker images -q "$ANTIGRAVITY_IMAGE_NAME" 2>/dev/null)
 
-  if docker build --pull ${no_cache_flag} -f "$AI_DOCKER_REPO_DIR/Dockerfile.gemini" -t "$GEMINI_IMAGE_NAME" "$AI_DOCKER_REPO_DIR"; then
+  if docker build --pull ${no_cache_flag} -f "$AI_DOCKER_REPO_DIR/Dockerfile.antigravity" -t "$ANTIGRAVITY_IMAGE_NAME" "$AI_DOCKER_REPO_DIR"; then
     if [ -n "$old_image_id" ]; then
       local new_image_id
-      new_image_id=$(docker images -q "$GEMINI_IMAGE_NAME" 2>/dev/null)
+      new_image_id=$(docker images -q "$ANTIGRAVITY_IMAGE_NAME" 2>/dev/null)
       if [ "$old_image_id" != "$new_image_id" ]; then
         echo "Cleaning up previous image version ($old_image_id)..." >&2
         docker rmi "$old_image_id" 2>/dev/null || true
@@ -568,7 +573,7 @@ gemini-docker-build() {
   fi
 }
 
-gemini-docker-shell() {
+antigravity-docker-shell() {
   local cwd
   if [ -n "${1-}" ]; then
     if [ ! -d "$1" ]; then
@@ -584,7 +589,7 @@ gemini-docker-shell() {
   _ai_docker_update_recents "$cwd"
 
   if [ "$cwd" = "$HOME" ]; then
-    echo "⚠️ Warning: You are running gemini-docker-shell from your HOME directory." >&2
+    echo "⚠️ Warning: You are running antigravity-docker-shell from your HOME directory." >&2
     echo "This will mount your entire HOME into the container workspace." >&2
     printf "Proceed with mounting HOME? [y/N]: " >&2
     IFS= read -r confirm
@@ -596,16 +601,16 @@ gemini-docker-shell() {
 
 
   if [ "${AI_DOCKER_TERM_TITLE_ENABLE}" = "1" ]; then
-    local _gemini_title="gemini+$(basename "${cwd}")"
+    local _antigravity_title="antigravity+$(basename "${cwd}")"
     if [ -n "${ITERM_SESSION_ID-}" ] || [ "${TERM_PROGRAM-}" = "iTerm.app" ]; then
       if command -v base64 >/dev/null 2>&1; then
-        printf '\033]1337;SetUserVar=%s=%s\007' "JOB_NAME" "$(printf "%s" "${_gemini_title}" | base64)" 2>/dev/null || true
+        printf '\033]1337;SetUserVar=%s=%s\007' "JOB_NAME" "$(printf "%s" "${_antigravity_title}" | base64)" 2>/dev/null || true
       fi
     fi
     # OSC 1: icon name (many terminals use this as a title source)
-    printf '\033]1;%s\007' "${_gemini_title}" 2>/dev/null || true
+    printf '\033]1;%s\007' "${_antigravity_title}" 2>/dev/null || true
     # OSC 0: window title (tab title)
-    printf '\033]0;%s\007' "${_gemini_title}" 2>/dev/null || true
+    printf '\033]0;%s\007' "${_antigravity_title}" 2>/dev/null || true
   fi
 
   local workspace_name
@@ -615,7 +620,7 @@ gemini-docker-shell() {
 
   local docker_args=(
     --rm -it
-    --env-file "$GEMINI_CONFIG_PATH/docker-env.env"
+    --env-file "$ANTIGRAVITY_CONFIG_PATH/docker-env.env"
     --entrypoint "/bin/bash"
   )
   if _ai_docker_should_mount_localtime; then
@@ -628,16 +633,16 @@ gemini-docker-shell() {
     docker_args+=(-v "$HOME/.config/git/config:/root/.config/git/config:ro")
   fi
   docker_args+=(
-    -v "$GEMINI_CONFIG_PATH:/root/.gemini"
+    -v "$ANTIGRAVITY_CONFIG_PATH:/root/.gemini"
     -v "${cwd}:/workspace/${workspace_name}"
     -w "/workspace/${workspace_name}"
     -e "TZ=${tz_value}"
     -e "TERM=${TERM:-xterm-256color}"
     -e "TMUX_SESSION=${workspace_name}"
     -e "AI_DOCKER_PROFILE=${AI_DOCKER_PROFILE}"
-    -e AI_NAME=gemini
-    -e AI_COMMAND=gemini
-    "$GEMINI_IMAGE_NAME"
+    -e AI_NAME=antigravity
+    -e AI_COMMAND=agy
+    "$ANTIGRAVITY_IMAGE_NAME"
     -lc "start-tmux-layout"
   )
 
@@ -788,7 +793,7 @@ opencode-docker-build() {
 
 docker-ai-build-all() {
   codex-docker-build --no-cache || return $?
-  gemini-docker-build --no-cache || return $?
+  antigravity-docker-build --no-cache || return $?
   opencode-docker-build --no-cache || return $?
   claude-docker-build --no-cache || return $?
 }
@@ -885,5 +890,5 @@ ai-docker() {
 }
 
 ai-docker-deactivate() {
-  unset -f _ai_docker_migrate_legacy _ai_docker_get_project_profile _ai_docker_set_project_profile _ai_docker_load_profile ai-docker-profile _ai_docker_update_recents _ai_docker_is_linux_host _ai_docker_should_mount_localtime _ai_docker_detect_tz _ai_docker_should_use_host_network codex-docker-build codex-docker-shell codex-auth-docker-run gemini-docker-build gemini-docker-shell claude-docker-build claude-docker-shell opencode-docker-build opencode-docker-shell docker-ai-build-all ai-docker ai-docker-deactivate
+  unset -f _ai_docker_migrate_legacy _ai_docker_get_project_profile _ai_docker_set_project_profile _ai_docker_load_profile ai-docker-profile _ai_docker_update_recents _ai_docker_is_linux_host _ai_docker_should_mount_localtime _ai_docker_detect_tz _ai_docker_should_use_host_network codex-docker-build codex-docker-shell codex-auth-docker-run antigravity-docker-build antigravity-docker-shell claude-docker-build claude-docker-shell opencode-docker-build opencode-docker-shell docker-ai-build-all ai-docker ai-docker-deactivate
 }

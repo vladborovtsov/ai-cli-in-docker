@@ -124,20 +124,20 @@ class TestBashTui(unittest.TestCase):
             success, _ = self.read_until(master_fd, ["[Use ↑/↓ or j/k to navigate", "▸ 💬 Launch Claude Code"], timeout=3.0)
             self.assertTrue(success)
 
-            # Send 'j' to navigate down to Gemini CLI
+            # Send 'j' to navigate down to Antigravity CLI
             os.write(master_fd, b"j")
-            success, clean_output = self.read_until(master_fd, ["▸ 💬 Launch Gemini CLI"], timeout=2.0)
-            self.assertTrue(success, f"Gemini was not selected. Output: {clean_output}")
+            success, clean_output = self.read_until(master_fd, ["▸ 💬 Launch Antigravity CLI"], timeout=2.0)
+            self.assertTrue(success, f"Antigravity was not selected. Output: {clean_output}")
 
             # Send Down arrow sequence to navigate down to OpenAI Codex
             os.write(master_fd, b"\x1b[B")
             success, clean_output = self.read_until(master_fd, ["▸ 💬 Launch OpenAI Codex"], timeout=2.0)
             self.assertTrue(success, f"Codex was not selected. Output: {clean_output}")
 
-            # Send 'k' to move back up to Gemini CLI
+            # Send 'k' to move back up to Antigravity CLI
             os.write(master_fd, b"k")
-            success, clean_output = self.read_until(master_fd, ["▸ 💬 Launch Gemini CLI"], timeout=2.0)
-            self.assertTrue(success, f"Gemini was not re-selected. Output: {clean_output}")
+            success, clean_output = self.read_until(master_fd, ["▸ 💬 Launch Antigravity CLI"], timeout=2.0)
+            self.assertTrue(success, f"Antigravity was not re-selected. Output: {clean_output}")
 
             # Quit
             os.write(master_fd, b"q")
@@ -181,9 +181,9 @@ class TestBashTui(unittest.TestCase):
             self.assertTrue(success)
 
             # Move down index-by-index with verification
-            # Move to Gemini
+            # Move to Antigravity
             os.write(master_fd, b"j")
-            self.assertTrue(self.read_until(master_fd, ["▸ 💬 Launch Gemini CLI"], timeout=1.0)[0])
+            self.assertTrue(self.read_until(master_fd, ["▸ 💬 Launch Antigravity CLI"], timeout=1.0)[0])
 
             # Move to Codex
             os.write(master_fd, b"j")
@@ -267,7 +267,7 @@ class TestBashTui(unittest.TestCase):
             self.assertTrue(success, f"Main menu did not load correctly. Output: {clean_output}")
 
             # Navigate to Change Workspace Directory (index 4 in main_items)
-            # main_items has: 0: Claude, 1: Gemini, 2: Codex, 3: OpenCode, 4: Change Workspace
+            # main_items has: 0: Claude, 1: Antigravity, 2: Codex, 3: OpenCode, 4: Change Workspace
             for _ in range(4):
                 os.write(master_fd, b"j")
                 time.sleep(0.1)

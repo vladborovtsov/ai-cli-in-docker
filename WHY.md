@@ -9,7 +9,7 @@ While many AI tools (such as `Claude Code`) implement their own internal sandbox
 
 #### 2. Host System "Hygiene"
 AI CLI tools often come with a heavy tail of dependencies and specific runtime requirements (Node.js, Python, etc.).
-*   **Version Isolation**: Run multiple tools (Gemini, Claude, Codex) without worrying about conflicting Node.js versions or polluting your host's global `npm` or `pip` namespace.
+*   **Version Isolation**: Run multiple tools (Antigravity, Claude, Codex) without worrying about conflicting Node.js versions or polluting your host's global `npm` or `pip` namespace.
 *   **Consistent Environment**: Ensures that the tool behaves identically regardless of which machine you are working on, provided Docker is installed.
 
 #### 3. Pre-configured "IDE-like" Terminal Environment

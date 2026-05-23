@@ -68,7 +68,7 @@ function Get-MainItems {
   $profile = if ($script:AI_DOCKER_PROFILE) { $script:AI_DOCKER_PROFILE } else { "default" }
   return @(
     "💬 Launch Claude Code",
-    "💬 Launch Gemini CLI",
+    "💬 Launch Antigravity CLI",
     "💬 Launch OpenAI Codex",
     "💬 Launch OpenCode",
     "📁 Change Workspace Directory...",
@@ -122,7 +122,7 @@ function Get-ProfileItems {
 
 $buildItems = @(
   "📦 Claude Code (Dockerfile.claude)",
-  "📦 Gemini CLI   (Dockerfile.gemini)",
+  "📦 Antigravity CLI (Dockerfile.antigravity)",
   "📦 OpenAI Codex (Dockerfile.codex)",
   "📦 OpenCode     (Dockerfile.opencode)",
   "🔄 Rebuild ALL  (No Cache)",
@@ -131,7 +131,7 @@ $buildItems = @(
 
 $configItems = @(
   "📝 Claude Env   (docker-env.env)",
-  "📝 Gemini Env   (docker-env.env)",
+  "📝 Antigravity Env (docker-env.env)",
   "📝 Codex Env    (docker-env.env)",
   "📝 OpenCode Env (docker-env.env)",
   "⬅️ Back to Main Menu"
@@ -305,13 +305,13 @@ function Render-Menu {
       Write-Host ""
 
       $claudeStatus = Get-ImageState -ImageName $script:CLAUDE_IMAGE_NAME
-      $geminiStatus = Get-ImageState -ImageName $script:GEMINI_IMAGE_NAME
+      $antigravityStatus = Get-ImageState -ImageName $script:ANTIGRAVITY_IMAGE_NAME
       $codexStatus = Get-ImageState -ImageName $script:CODEX_IMAGE_NAME
       $opencodeStatus = Get-ImageState -ImageName $script:OPENCODE_IMAGE_NAME
 
       $statuses = @(
         $claudeStatus,
-        $geminiStatus,
+        $antigravityStatus,
         $codexStatus,
         $opencodeStatus,
         "", "", "", "", "", "", ""
@@ -663,7 +663,7 @@ function Run-Cleanup {
     }
     "remove_all_images" {
       Write-Host "Removing all project images..." -ForegroundColor Cyan
-      docker rmi -f $script:CLAUDE_IMAGE_NAME $script:GEMINI_IMAGE_NAME $script:CODEX_IMAGE_NAME $script:OPENCODE_IMAGE_NAME 2>$null
+      docker rmi -f $script:CLAUDE_IMAGE_NAME $script:ANTIGRAVITY_IMAGE_NAME $script:CODEX_IMAGE_NAME $script:OPENCODE_IMAGE_NAME 2>$null
     }
   }
   Write-Host ""
@@ -675,7 +675,7 @@ function Handle-Select {
     "main" {
       switch ($script:selected_index) {
         0 { Launch-Tool -ImageName $script:CLAUDE_IMAGE_NAME -BuildFunc { claude-docker-build } -ShellFunc { param($Path) claude-docker-shell -Path $Path } }
-        1 { Launch-Tool -ImageName $script:GEMINI_IMAGE_NAME -BuildFunc { gemini-docker-build } -ShellFunc { param($Path) gemini-docker-shell -Path $Path } }
+        1 { Launch-Tool -ImageName $script:ANTIGRAVITY_IMAGE_NAME -BuildFunc { antigravity-docker-build } -ShellFunc { param($Path) antigravity-docker-shell -Path $Path } }
         2 { Launch-Tool -ImageName $script:CODEX_IMAGE_NAME -BuildFunc { codex-docker-build } -ShellFunc { param($Path) codex-docker-shell -Path $Path } }
         3 { Launch-Tool -ImageName $script:OPENCODE_IMAGE_NAME -BuildFunc { opencode-docker-build } -ShellFunc { param($Path) opencode-docker-shell -Path $Path } }
         4 { $script:current_menu = "workspace"; $script:selected_index = 0 }
@@ -925,7 +925,7 @@ function Handle-Select {
     "build" {
       switch ($script:selected_index) {
         0 { Run-Build -BuildFunc { claude-docker-build } }
-        1 { Run-Build -BuildFunc { gemini-docker-build } }
+        1 { Run-Build -BuildFunc { antigravity-docker-build } }
         2 { Run-Build -BuildFunc { codex-docker-build } }
         3 { Run-Build -BuildFunc { opencode-docker-build } }
         4 { Run-Build -BuildFunc { docker-ai-build-all } }
@@ -935,7 +935,7 @@ function Handle-Select {
     "config" {
       switch ($script:selected_index) {
         0 { Edit-EnvFile -Path (Join-Path $script:CLAUDE_CONFIG_PATH 'docker-env.env') }
-        1 { Edit-EnvFile -Path (Join-Path $script:GEMINI_CONFIG_PATH 'docker-env.env') }
+        1 { Edit-EnvFile -Path (Join-Path $script:ANTIGRAVITY_CONFIG_PATH 'docker-env.env') }
         2 { Edit-EnvFile -Path (Join-Path $script:CODEX_CONFIG_PATH 'docker-env.env') }
         3 { Edit-EnvFile -Path (Join-Path $script:OPENCODE_DOCKER_DIR 'docker-env.env') }
         4 { [void](Handle-Back) }

@@ -3,8 +3,8 @@
 #   . .\activate.ps1
 #   codex-docker-build
 #   codex-docker-shell
-#   gemini-docker-build
-#   gemini-docker-shell
+#   antigravity-docker-build
+#   antigravity-docker-shell
 #   opencode-docker-build
 #   opencode-docker-shell
 #   claude-docker-build
@@ -12,7 +12,7 @@
 #   docker-ai-build-all
 
 $script:CODEX_IMAGE_NAME = "my-codex-image"
-$script:GEMINI_IMAGE_NAME = "my-gemini-image"
+$script:ANTIGRAVITY_IMAGE_NAME = "my-antigravity-image"
 $script:CLAUDE_IMAGE_NAME = "my-claude-image"
 $script:OPENCODE_IMAGE_NAME = "my-opencode-image"
 
@@ -111,7 +111,7 @@ function _ai_docker_migrate_legacy {
   }
 
   _ai_docker_migrate_dir -Src $legacyCodex -Dest (Join-Path $targetDir "codex-docker-config")
-  _ai_docker_migrate_dir -Src $legacyGemini -Dest (Join-Path $targetDir "gemini-cli-docker-config")
+  _ai_docker_migrate_dir -Src $legacyGemini -Dest (Join-Path $targetDir "antigravity-cli-docker-config")
   _ai_docker_migrate_dir -Src $legacyClaude -Dest (Join-Path $targetDir "claude-docker-config")
   _ai_docker_migrate_dir -Src $legacyOpencode -Dest (Join-Path $targetDir "opencode-docker")
 }
@@ -233,14 +233,20 @@ function _ai_docker_load_profile {
 
   $profileDir = Join-Path (Join-Path $HOME ".ai-docker-profiles") $script:AI_DOCKER_PROFILE
   $script:CODEX_CONFIG_PATH = Join-Path $profileDir "codex-docker-config"
-  $script:GEMINI_CONFIG_PATH = Join-Path $profileDir "gemini-cli-docker-config"
+  $script:ANTIGRAVITY_CONFIG_PATH = Join-Path $profileDir "antigravity-cli-docker-config"
   $script:CLAUDE_CONFIG_PATH = Join-Path $profileDir "claude-docker-config"
   $script:OPENCODE_DOCKER_DIR = Join-Path $profileDir "opencode-docker"
   $script:AI_DOCKER_RECENTS_FILE = Join-Path $profileDir "ai-docker-recents"
 
+  # Migrate profile-level config folder if it exists
+  $oldGeminiPath = Join-Path $profileDir "gemini-cli-docker-config"
+  if ((Test-Path -LiteralPath $oldGeminiPath -PathType Container) -and -not (Test-Path -LiteralPath $script:ANTIGRAVITY_CONFIG_PATH -PathType Container)) {
+    Move-Item -LiteralPath $oldGeminiPath -Destination $script:ANTIGRAVITY_CONFIG_PATH -Force -ErrorAction SilentlyContinue
+  }
+
   foreach ($dir in @(
     $script:CODEX_CONFIG_PATH,
-    $script:GEMINI_CONFIG_PATH,
+    $script:ANTIGRAVITY_CONFIG_PATH,
     $script:CLAUDE_CONFIG_PATH,
     $script:OPENCODE_DOCKER_DIR
   )) {
@@ -578,17 +584,17 @@ function codex-docker-build {
   }
 }
 
-function gemini-docker-build {
+function antigravity-docker-build {
   param(
     [switch]$NoCache,
     [Parameter(ValueFromRemainingArguments = $true)][string[]]$RemainingArgs
   )
 
   try {
-    if (_ai_docker_resolve_no_cache -RemainingArgs $RemainingArgs -Usage 'gemini-docker-build [--no-cache]') {
+    if (_ai_docker_resolve_no_cache -RemainingArgs $RemainingArgs -Usage 'antigravity-docker-build [--no-cache]') {
       $NoCache = $true
     }
-    return _ai_docker_build_image -ImageName $script:GEMINI_IMAGE_NAME -DockerfileName 'Dockerfile.gemini' -NoCache:$NoCache
+    return _ai_docker_build_image -ImageName $script:ANTIGRAVITY_IMAGE_NAME -DockerfileName 'Dockerfile.antigravity' -NoCache:$NoCache
   } catch {
     Write-Error $_
     return 2
@@ -702,7 +708,7 @@ function codex-auth-docker-run {
   return _ai_docker_run_container @runParams
 }
 
-function gemini-docker-shell {
+function antigravity-docker-shell {
   param([string]$Path)
 
   try {
@@ -714,25 +720,25 @@ function gemini-docker-shell {
 
   _ai_docker_load_profile -TargetProfile "" -Directory $cwd
   _ai_docker_update_recents -PathToAdd $cwd
-  if (-not (_ai_docker_confirm_home_mount -Path $cwd -CommandName 'gemini-docker-shell')) {
+  if (-not (_ai_docker_confirm_home_mount -Path $cwd -CommandName 'antigravity-docker-shell')) {
     Write-Host "Canceled."
     return 1
   }
 
-  _ai_docker_set_title -ToolName 'gemini' -WorkspacePath $cwd
+  _ai_docker_set_title -ToolName 'antigravity' -WorkspacePath $cwd
   $workspaceLeaf = Split-Path -Leaf $cwd
   $envVars = @{
     TERM = $(if ($env:TERM) { $env:TERM } else { 'xterm-256color' })
     TMUX_SESSION = $workspaceLeaf
     AI_DOCKER_PROFILE = $script:AI_DOCKER_PROFILE
-    AI_NAME = 'gemini'
-    AI_COMMAND = 'gemini'
+    AI_NAME = 'antigravity'
+    AI_COMMAND = 'agy'
   }
 
   $runParams = @{
-    ImageName = $script:GEMINI_IMAGE_NAME
-    EnvFile = (Join-Path $script:GEMINI_CONFIG_PATH 'docker-env.env')
-    VolumeMounts = @("${script:GEMINI_CONFIG_PATH}:/root/.gemini")
+    ImageName = $script:ANTIGRAVITY_IMAGE_NAME
+    EnvFile = (Join-Path $script:ANTIGRAVITY_CONFIG_PATH 'docker-env.env')
+    VolumeMounts = @("${script:ANTIGRAVITY_CONFIG_PATH}:/root/.gemini")
     WorkspacePath = $cwd
     EnvironmentVariables = $envVars
     CommandArgs = @('-lc', 'start-tmux-layout')
@@ -823,7 +829,7 @@ function opencode-docker-shell {
 function docker-ai-build-all {
   $steps = @(
     { codex-docker-build -NoCache },
-    { gemini-docker-build -NoCache },
+    { antigravity-docker-build -NoCache },
     { opencode-docker-build -NoCache },
     { claude-docker-build -NoCache }
   )
@@ -869,7 +875,7 @@ function ai-docker-deactivate {
     '_ai_docker_resolve_no_cache', '_ai_docker_load_profile',
     '_ai_docker_migrate_legacy', '_ai_docker_migrate_dir', '_ai_docker_get_project_profile', '_ai_docker_set_project_profile', 'ai-docker-profile',
     'codex-docker-build', 'codex-docker-shell', 'codex-auth-docker-run',
-    'gemini-docker-build', 'gemini-docker-shell',
+    'antigravity-docker-build', 'antigravity-docker-shell',
     'claude-docker-build', 'claude-docker-shell',
     'opencode-docker-build', 'opencode-docker-shell',
     'docker-ai-build-all', 'ai-docker', 'ai-docker-deactivate'

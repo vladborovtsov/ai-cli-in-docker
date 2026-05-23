@@ -5,7 +5,7 @@ set -euo pipefail
 TOOL_NAME="${1:-}"
 
 if [ -z "$TOOL_NAME" ]; then
-  echo "Error: TOOL_NAME must be specified as first argument (claude, gemini, codex, opencode)." >&2
+  echo "Error: TOOL_NAME must be specified as first argument (claude, antigravity, codex, opencode)." >&2
   exit 1
 fi
 
@@ -40,11 +40,11 @@ case "$TOOL_NAME" in
       exit 1
     fi
     ;;
-  gemini)
-    if command -v gemini >/dev/null 2>&1; then
-      echo "✔ gemini CLI command is present."
+  antigravity)
+    if command -v agy >/dev/null 2>&1; then
+      echo "✔ agy CLI command is present."
     else
-      echo "✘ ERROR: gemini CLI command is NOT present!" >&2
+      echo "✘ ERROR: agy CLI command is NOT present!" >&2
       exit 1
     fi
     ;;
