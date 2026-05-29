@@ -341,7 +341,12 @@ render_menu() {
 
   # Calculate layout widths
   local mount_path="${active_mount_path}"
-  local base_dir="${mount_path##*/}"
+  local base_dir
+  if command -v _ai_docker_get_unique_workspace_name >/dev/null 2>&1; then
+    base_dir=$(_ai_docker_get_unique_workspace_name "${mount_path}")
+  else
+    base_dir="${mount_path##*/}"
+  fi
   if [ -z "$base_dir" ] || [ "$base_dir" = "." ] || [ "$base_dir" = "/" ]; then
     base_dir="project"
   fi

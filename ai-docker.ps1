@@ -279,7 +279,7 @@ function Render-Menu {
   }
 
   $mountPath = $script:AI_DOCKER_ACTIVE_WORKSPACE
-  $baseDir = Split-Path -Leaf $mountPath
+  $baseDir = _ai_docker_get_unique_workspace_name -Path $mountPath
   if ([string]::IsNullOrWhiteSpace($baseDir) -or $baseDir -eq "." -or $baseDir -eq "/") {
     $baseDir = "project"
   }

@@ -116,6 +116,21 @@ Describe "PowerShell Helper Functions" {
             $lines[1] | Should -Be $dir1
         }
 
+        It "Calculates unique workspace name correctly" {
+            # Under HOME
+            $testProj1 = Join-Path $HOME "projects\projA\_utils"
+            $name1 = _ai_docker_get_unique_workspace_name -Path $testProj1
+            $name1 | Should -Be "projects-projA-_utils"
+
+            # HOME itself
+            $nameHome = _ai_docker_get_unique_workspace_name -Path $HOME
+            $nameHome | Should -Be "home"
+
+            # Outside HOME
+            $nameOutside = _ai_docker_get_unique_workspace_name -Path "/opt/tools/helper"
+            $nameOutside | Should -Be "opt-tools-helper"
+        }
+
         It "Handles profile commands" {
             # Activate profile
             ai-docker-profile "test-profile-ps"

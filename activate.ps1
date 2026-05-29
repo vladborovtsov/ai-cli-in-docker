@@ -365,6 +365,35 @@ function _ai_docker_get_workspace {
   return _ai_docker_resolve_dir -Path $Path
 }
 
+function _ai_docker_get_unique_workspace_name {
+  param([string]$Path)
+  if ([string]::IsNullOrWhiteSpace($Path)) {
+    return "workspace"
+  }
+  $resolved = _ai_docker_resolve_dir -Path $Path
+
+  $resolvedHome = [System.IO.Path]::GetFullPath($HOME).TrimEnd('\').TrimEnd('/')
+  $resolvedPath = [System.IO.Path]::GetFullPath($resolved).TrimEnd('\').TrimEnd('/')
+
+  $relPath = ""
+  if ($resolvedPath.StartsWith($resolvedHome, [System.StringComparison]::OrdinalIgnoreCase)) {
+    if ($resolvedPath -eq $resolvedHome) {
+      $relPath = "home"
+    } else {
+      $relPath = $resolvedPath.Substring($resolvedHome.Length).TrimStart('\').TrimStart('/')
+    }
+  } else {
+    if ($resolvedPath.Length -gt 1 -and $resolvedPath[1] -eq ':') {
+      $relPath = $resolvedPath.Substring(2).TrimStart('\').TrimStart('/')
+    } else {
+      $relPath = $resolvedPath.TrimStart('\').TrimStart('/')
+    }
+  }
+
+  $safeName = $relPath.Replace("\", "-").Replace("/", "-")
+  return $safeName
+}
+
 function _ai_docker_is_home_path {
   param([Parameter(Mandatory = $true)][string]$Path)
 
@@ -433,7 +462,7 @@ function _ai_docker_set_title {
     return
   }
 
-  $workspaceLeaf = Split-Path -Leaf $WorkspacePath
+  $workspaceLeaf = _ai_docker_get_unique_workspace_name -Path $WorkspacePath
   if ([string]::IsNullOrWhiteSpace($workspaceLeaf)) {
     $workspaceLeaf = "workspace"
   }
@@ -456,7 +485,7 @@ function _ai_docker_run_container {
     [switch]$UseHostNetwork
   )
 
-  $workspaceLeaf = Split-Path -Leaf $WorkspacePath
+  $workspaceLeaf = _ai_docker_get_unique_workspace_name -Path $WorkspacePath
   if ([string]::IsNullOrWhiteSpace($workspaceLeaf)) {
     $workspaceLeaf = "workspace"
   }
@@ -653,7 +682,7 @@ function codex-docker-shell {
   }
 
   _ai_docker_set_title -ToolName 'codex' -WorkspacePath $cwd
-  $workspaceLeaf = Split-Path -Leaf $cwd
+  $workspaceLeaf = _ai_docker_get_unique_workspace_name -Path $cwd
   $envVars = @{
     TERM = $(if ($env:TERM) { $env:TERM } else { 'xterm-256color' })
     TMUX_SESSION = $workspaceLeaf
@@ -726,7 +755,7 @@ function antigravity-docker-shell {
   }
 
   _ai_docker_set_title -ToolName 'antigravity' -WorkspacePath $cwd
-  $workspaceLeaf = Split-Path -Leaf $cwd
+  $workspaceLeaf = _ai_docker_get_unique_workspace_name -Path $cwd
   $envVars = @{
     TERM = $(if ($env:TERM) { $env:TERM } else { 'xterm-256color' })
     TMUX_SESSION = $workspaceLeaf
@@ -764,7 +793,7 @@ function claude-docker-shell {
   }
 
   _ai_docker_set_title -ToolName 'claude' -WorkspacePath $cwd
-  $workspaceLeaf = Split-Path -Leaf $cwd
+  $workspaceLeaf = _ai_docker_get_unique_workspace_name -Path $cwd
   $envVars = @{
     TERM = $(if ($env:TERM) { $env:TERM } else { 'xterm-256color' })
     TMUX_SESSION = $workspaceLeaf
@@ -802,7 +831,7 @@ function opencode-docker-shell {
   }
 
   _ai_docker_set_title -ToolName 'opencode' -WorkspacePath $cwd
-  $workspaceLeaf = Split-Path -Leaf $cwd
+  $workspaceLeaf = _ai_docker_get_unique_workspace_name -Path $cwd
   $envVars = @{
     TERM = $(if ($env:TERM) { $env:TERM } else { 'xterm-256color' })
     TMUX_SESSION = $workspaceLeaf
@@ -870,6 +899,7 @@ function ai-docker-deactivate {
   foreach ($name in @(
     '_ai_docker_ensure_dir', '_ai_docker_ensure_file', '_ai_docker_resolve_dir',
     '_ai_docker_update_recents', '_ai_docker_get_workspace', '_ai_docker_is_home_path',
+    '_ai_docker_get_unique_workspace_name',
     '_ai_docker_confirm_home_mount', '_ai_docker_get_tz', '_ai_docker_should_use_host_network',
     '_ai_docker_set_title', '_ai_docker_run_container', '_ai_docker_build_image',
     '_ai_docker_resolve_no_cache', '_ai_docker_load_profile',

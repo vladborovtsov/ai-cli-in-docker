@@ -123,5 +123,20 @@ class TestBashHelpers(unittest.TestCase):
         with open(active_file, "r") as f:
             self.assertEqual(f.read().strip(), "test-profile")
 
+    def test_unique_workspace_name(self):
+        # Under HOME
+        test_path1 = os.path.join(self.tmp_dir, "projects", "projA", "_utils")
+        os.makedirs(test_path1)
+        res1 = self.run_bash(f'_ai_docker_get_unique_workspace_name "{test_path1}"')
+        self.assertEqual(res1.stdout.strip(), "projects-projA-_utils")
+
+        # HOME itself
+        res_home = self.run_bash(f'_ai_docker_get_unique_workspace_name "{self.tmp_dir}"')
+        self.assertEqual(res_home.stdout.strip(), "home")
+
+        # Outside HOME
+        res_outside = self.run_bash('_ai_docker_get_unique_workspace_name "/opt/tools/helper"')
+        self.assertEqual(res_outside.stdout.strip(), "opt-tools-helper")
+
 if __name__ == "__main__":
     unittest.main()
