@@ -37,8 +37,11 @@ export TERM="${TERM:-xterm-256color}"
 export LANG="${LANG:-C.UTF-8}"
 export TMUX_TMPDIR="${TMUX_TMPDIR:-/tmp}"
 
+# Allow configuring number of status lines (default: 2)
+TMUX_STATUS_LINES="${TMUX_STATUS_LINES:-2}"
+
 # Allow longer session name in tmux status bar (status-left)
-STATUS_LEFT_LENGTH="${TMUX_STATUS_LEFT_LENGTH:-60}"
+STATUS_LEFT_LENGTH="${TMUX_STATUS_LEFT_LENGTH:-$( [ "${TMUX_STATUS_LINES}" -eq 2 ] && echo 999 || echo 60 )}"
 STATUS_RIGHT_LENGTH="${TMUX_STATUS_RIGHT_LENGTH:-64}"
 # Status-left content: show session name in yellow, active profile in light blue, brackets in dark gray
 profile_name="${AI_DOCKER_PROFILE:-default}"
@@ -87,6 +90,16 @@ fi
 (tmux bind-key Q confirm-before -p "Kill ALL tmux sessions and exit container? (y/n)" kill-server >/dev/null 2>&1 || true)
 
 # Apply configuration to the specific session (works whether it was created or pre-existing)
+if [ "${TMUX_STATUS_LINES}" -eq 2 ]; then
+  (tmux set-option -t "${TMUX_SESSION}" -q status 2 >/dev/null 2>&1 || true)
+  (tmux set-option -g -q status 2 >/dev/null 2>&1 || true)
+  (tmux set-option -t "${TMUX_SESSION}" -q status-format[0] '#[list=on align=#{status-justify}]#[list=left-marker]<#[list=right-marker]>#[list=on]#{W:#[range=window|#{window_index} #{E:window-status-style}#{?#{&&:#{window_last_flag},#{!=:#{E:window-status-last-style},default}}, #{E:window-status-last-style},}#{?#{&&:#{window_bell_flag},#{!=:#{E:window-status-bell-style},default}}, #{E:window-status-bell-style},#{?#{&&:#{||:#{window_activity_flag},#{window_silence_flag}},#{!=:#{E:window-status-activity-style},default}}, #{E:window-status-activity-style},}}]#[push-default]#{T:window-status-format}#[pop-default]#[norange default]#{?window_end_flag,,#{window-status-separator}},#[range=window|#{window_index} list=focus #{?#{!=:#{E:window-status-current-style},default},#{E:window-status-current-style},#{E:window-status-style}}#{?#{&&:#{window_last_flag},#{!=:#{E:window-status-last-style},default}}, #{E:window-status-last-style},}#{?#{&&:#{window_bell_flag},#{!=:#{E:window-status-bell-style},default}}, #{E:window-status-bell-style},#{?#{&&:#{||:#{window_activity_flag},#{window_silence_flag}},#{!=:#{E:window-status-activity-style},default}}, #{E:window-status-activity-style},}}]#[push-default]#{T:window-status-current-format}#[pop-default]#[norange list=on default]#{?window_end_flag,,#{window-status-separator}}}' >/dev/null 2>&1 || true)
+  (tmux set-option -t "${TMUX_SESSION}" -q status-format[1] '#[align=left range=left #{E:status-left-style}]#[push-default]#{T;=/#{status-left-length}:status-left}#[pop-default]#[norange default]#[nolist align=right range=right #{E:status-right-style}]#[push-default]#{T;=/#{status-right-length}:status-right}#[pop-default]#[norange default]' >/dev/null 2>&1 || true)
+else
+  (tmux set-option -t "${TMUX_SESSION}" -q status 1 >/dev/null 2>&1 || true)
+  (tmux set-option -g -q status 1 >/dev/null 2>&1 || true)
+fi
+
 (tmux set-option -t "${TMUX_SESSION}" -q status-left-length "${STATUS_LEFT_LENGTH}" >/dev/null 2>&1 || true)
 (tmux set-option -t "${TMUX_SESSION}" -q status-left "$TMUX_STATUS_LEFT" >/dev/null 2>&1 || true)
 (tmux set-option -t "${TMUX_SESSION}" -q status-right-length "${STATUS_RIGHT_LENGTH}" >/dev/null 2>&1 || true)

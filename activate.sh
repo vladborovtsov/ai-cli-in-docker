@@ -312,6 +312,31 @@ _ai_docker_update_recents() {
   fi
 }
 
+_ai_docker_get_unique_workspace_name() {
+  local target_path="${1-}"
+  if [ -z "$target_path" ]; then
+    echo "workspace"
+    return
+  fi
+  local resolved
+  resolved=$(cd "$target_path" 2>/dev/null && pwd || echo "$target_path")
+
+  local rel_path
+  if [[ "$resolved" == "$HOME"* ]]; then
+    rel_path="${resolved#$HOME/}"
+    if [ "$resolved" = "$HOME" ]; then
+      rel_path="home"
+    fi
+  else
+    rel_path="${resolved#/}"
+  fi
+
+  # Replace all path separators with dashes
+  local safe_name
+  safe_name=$(echo "$rel_path" | tr '/' '-')
+  echo "$safe_name"
+}
+
 _ai_docker_is_linux_host() {
   [ "$(uname -s 2>/dev/null || echo "")" = "Linux" ]
 }
@@ -452,7 +477,7 @@ codex-docker-shell() {
   fi
 
   local workspace_name
-  workspace_name="$(basename "${cwd}")"
+  workspace_name="$(_ai_docker_get_unique_workspace_name "${cwd}")"
   local tz_value
   tz_value="$(_ai_docker_detect_tz)"
 
@@ -513,7 +538,7 @@ codex-auth-docker-run() {
     esac
   fi
   local workspace_name
-  workspace_name="$(basename "${cwd}")"
+  workspace_name="$(_ai_docker_get_unique_workspace_name "${cwd}")"
   local tz_value
   tz_value="$(_ai_docker_detect_tz)"
 
@@ -614,7 +639,7 @@ antigravity-docker-shell() {
   fi
 
   local workspace_name
-  workspace_name="$(basename "${cwd}")"
+  workspace_name="$(_ai_docker_get_unique_workspace_name "${cwd}")"
   local tz_value
   tz_value="$(_ai_docker_detect_tz)"
 
@@ -723,7 +748,7 @@ claude-docker-shell() {
   fi
 
   local workspace_name
-  workspace_name="$(basename "${cwd}")"
+  workspace_name="$(_ai_docker_get_unique_workspace_name "${cwd}")"
   local tz_value
   tz_value="$(_ai_docker_detect_tz)"
 
@@ -839,7 +864,7 @@ opencode-docker-shell() {
   fi
 
   local workspace_name
-  workspace_name="$(basename "${cwd}")"
+  workspace_name="$(_ai_docker_get_unique_workspace_name "${cwd}")"
   local tz_value
   tz_value="$(_ai_docker_detect_tz)"
 
@@ -890,5 +915,5 @@ ai-docker() {
 }
 
 ai-docker-deactivate() {
-  unset -f _ai_docker_migrate_legacy _ai_docker_get_project_profile _ai_docker_set_project_profile _ai_docker_load_profile ai-docker-profile _ai_docker_update_recents _ai_docker_is_linux_host _ai_docker_should_mount_localtime _ai_docker_detect_tz _ai_docker_should_use_host_network codex-docker-build codex-docker-shell codex-auth-docker-run antigravity-docker-build antigravity-docker-shell claude-docker-build claude-docker-shell opencode-docker-build opencode-docker-shell docker-ai-build-all ai-docker ai-docker-deactivate
+  unset -f _ai_docker_migrate_legacy _ai_docker_get_project_profile _ai_docker_set_project_profile _ai_docker_load_profile ai-docker-profile _ai_docker_update_recents _ai_docker_is_linux_host _ai_docker_should_mount_localtime _ai_docker_detect_tz _ai_docker_should_use_host_network codex-docker-build codex-docker-shell codex-auth-docker-run antigravity-docker-build antigravity-docker-shell claude-docker-build claude-docker-shell opencode-docker-build opencode-docker-shell docker-ai-build-all ai-docker ai-docker-deactivate _ai_docker_get_unique_workspace_name
 }

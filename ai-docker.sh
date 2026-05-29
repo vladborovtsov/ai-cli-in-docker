@@ -341,7 +341,12 @@ render_menu() {
 
   # Calculate layout widths
   local mount_path="${active_mount_path}"
-  local base_dir="${mount_path##*/}"
+  local base_dir
+  if command -v _ai_docker_get_unique_workspace_name >/dev/null 2>&1; then
+    base_dir=$(_ai_docker_get_unique_workspace_name "${mount_path}")
+  else
+    base_dir="${mount_path##*/}"
+  fi
   if [ -z "$base_dir" ] || [ "$base_dir" = "." ] || [ "$base_dir" = "/" ]; then
     base_dir="project"
   fi
@@ -368,9 +373,15 @@ render_menu() {
   echo -e "${BOLD}└${top_border}┘${RESET}"
   
   # Global Context Info (Workspace Path and Profile Name)
-  local formatted_mount_path
-  formatted_mount_path=$(format_path "${mount_path}")
-  echo -e "  ${BOLD}Workspace:${RESET} ${formatted_mount_path} (${base_dir})"
+  local display_path
+  if [ "$mount_path" = "$HOME" ]; then
+    display_path="~"
+  elif [ "${mount_path#$HOME/}" != "$mount_path" ]; then
+    display_path="~/${mount_path#$HOME/}"
+  else
+    display_path="$mount_path"
+  fi
+  echo -e "  ${BOLD}Workspace:${RESET} ${display_path} (${base_dir})"
   echo -e "  ${BOLD}Profile:  ${RESET} ${GREEN}${AI_DOCKER_PROFILE:-default}${RESET}"
   echo ""
   lines_printed=7
@@ -1064,11 +1075,6 @@ while true; do
   render_menu "$selected_index"
   CAPTURE_OUTPUT=0
 
-  # Calculate menu_lines from the output structure
-  nl=$'\n'
-  newlines="${FRAME_BUF//[^"$nl"]/}"
-  menu_lines="${#newlines}"
-
   # Buffer the clear/move and render operations to write them in a single frame
   ESC=$'\e'
   frame_buf=""
@@ -1076,9 +1082,7 @@ while true; do
     clear
     force_clear=0
   else
-    if [ "$menu_lines" -gt 0 ]; then
-      frame_buf+="${ESC}[${menu_lines}A${ESC}[J"
-    fi
+    frame_buf+="${ESC}[H${ESC}[J"
   fi
   frame_buf+="$FRAME_BUF"
 
