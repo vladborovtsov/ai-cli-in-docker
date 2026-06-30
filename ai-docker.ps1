@@ -121,10 +121,10 @@ function Get-ProfileItems {
 }
 
 $buildItems = @(
-  "📦 Claude Code (Dockerfile.claude)",
-  "📦 Antigravity CLI (Dockerfile.antigravity)",
-  "📦 OpenAI Codex (Dockerfile.codex)",
-  "📦 OpenCode     (Dockerfile.opencode)",
+  "📦 Claude Code (Dockerfile.claude - No Cache)",
+  "📦 Antigravity CLI (Dockerfile.antigravity - No Cache)",
+  "📦 OpenAI Codex (Dockerfile.codex - No Cache)",
+  "📦 OpenCode     (Dockerfile.opencode - No Cache)",
   "🔄 Rebuild ALL  (No Cache)",
   "⬅️ Back to Main Menu"
 )
@@ -924,10 +924,10 @@ function Handle-Select {
     }
     "build" {
       switch ($script:selected_index) {
-        0 { Run-Build -BuildFunc { claude-docker-build } }
-        1 { Run-Build -BuildFunc { antigravity-docker-build } }
-        2 { Run-Build -BuildFunc { codex-docker-build } }
-        3 { Run-Build -BuildFunc { opencode-docker-build } }
+        0 { Run-Build -BuildFunc { claude-docker-build -NoCache } }
+        1 { Run-Build -BuildFunc { antigravity-docker-build -NoCache } }
+        2 { Run-Build -BuildFunc { codex-docker-build -NoCache } }
+        3 { Run-Build -BuildFunc { opencode-docker-build -NoCache } }
         4 { Run-Build -BuildFunc { docker-ai-build-all } }
         5 { [void](Handle-Back) }
       }

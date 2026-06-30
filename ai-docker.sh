@@ -296,10 +296,10 @@ load_profile_menu() {
 }
 
 build_items=(
-  "📦 Claude Code (Dockerfile.claude)"
-  "📦 Antigravity CLI (Dockerfile.antigravity)"
-  "📦 OpenAI Codex (Dockerfile.codex)"
-  "📦 OpenCode     (Dockerfile.opencode)"
+  "📦 Claude Code (Dockerfile.claude - No Cache)"
+  "📦 Antigravity CLI (Dockerfile.antigravity - No Cache)"
+  "📦 OpenAI Codex (Dockerfile.codex - No Cache)"
+  "📦 OpenCode     (Dockerfile.opencode - No Cache)"
   "🔄 Rebuild ALL  (No Cache)"
   "⬅️ Back to Main Menu"
 )
@@ -648,12 +648,11 @@ launch_tool() {
 
 # Run build command helper
 run_build() {
-  local build_func="$1"
   tput cnorm
   clear
-  echo "Running build command: $build_func..."
+  echo "Running build command: $*..."
   echo ""
-  if $build_func; then
+  if "$@"; then
     echo ""
     echo -e "${GREEN}Build completed successfully!${RESET}"
   else
@@ -951,10 +950,10 @@ handle_select() {
       ;;
     build)
       case "$selected_index" in
-        0) run_build claude-docker-build ;;
-        1) run_build antigravity-docker-build ;;
-        2) run_build codex-docker-build ;;
-        3) run_build opencode-docker-build ;;
+        0) run_build claude-docker-build --no-cache ;;
+        1) run_build antigravity-docker-build --no-cache ;;
+        2) run_build codex-docker-build --no-cache ;;
+        3) run_build opencode-docker-build --no-cache ;;
         4) run_build docker-ai-build-all ;;
         5) handle_back ;;
       esac
