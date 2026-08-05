@@ -690,7 +690,7 @@ function Handle-Select {
       switch ($script:selected_index) {
         0 { Launch-Tool -ImageName $script:CLAUDE_IMAGE_NAME -BuildFunc { claude-docker-build } -ShellFunc { param($Path) claude-docker-shell -Path $Path } }
         1 {
-            $env:AI_COMMAND = 'claude --enable-auto-mode'
+            $env:AI_COMMAND = 'claude --permission-mode auto'
             Launch-Tool -ImageName $script:CLAUDE_IMAGE_NAME -BuildFunc { claude-docker-build } -ShellFunc { param($Path) claude-docker-shell -Path $Path }
             Remove-Item Env:\AI_COMMAND -ErrorAction SilentlyContinue
         }
