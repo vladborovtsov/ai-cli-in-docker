@@ -6,7 +6,7 @@ Run AI CLI tools (OpenAI Codex, Google Antigravity, Claude, OpenCode) inside Doc
 - [Why AI CLI in Docker?](WHY.md): Rationale behind this project.
 - `Dockerfile.codex`: Based on `ghcr.io/openai/codex-universal` with `@openai/codex` preinstalled.
 - `Dockerfile.antigravity`: Based on `ubuntu:24.04` with the Google Antigravity CLI preinstalled.
-- `Dockerfile.claude`: Based on `ubuntu:24.04` with `@anthropic-ai/claude-code` preinstalled.
+- `Dockerfile.claude`: Based on `ubuntu:24.04` with `@anthropic-ai/claude-code` preinstalled. Supports launching in three variants: Standard Mode (💬), Auto Mode (🤖 with `--enable-auto-mode`), and Dangerous Mode (💀 with `--dangerously-skip-permissions` using a targeted `LD_PRELOAD` root privilege bypass).
 - `Dockerfile.opencode`: Based on `ubuntu:24.04` with `opencode-ai` preinstalled.
 - `activate.sh`: Bash/Zsh helper functions.
 - `ai-docker.sh`: Interactive Bash TUI.
@@ -168,6 +168,8 @@ ANTHROPIC_BASE_URL=http://host.docker.internal:1234
 ANTHROPIC_AUTH_TOKEN=lm
 ANTHROPIC_MODEL=mlx-community/qwen3.5-9b
 ```
+
+*Note: The container is pre-configured to export `CLAUDE_CODE_RETRY_WATCHDOG=1` and `CLAUDE_CODE_MAX_RETRIES=9999` for all Claude Code variants.*
 
 ### Known quirk with Codex auth link
 `codex-auth-docker-run` may print a wrapped sign-in URL.
