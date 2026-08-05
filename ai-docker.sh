@@ -637,17 +637,14 @@ launch_tool() {
   tput cnorm
   clear
   echo "Launching container session..."
-  echo "Close tmux session or type 'exit' inside the tmux window to return to TUI."
+  echo "Close tmux session or type 'exit' inside the tmux window to return to command line."
   echo ""
   
   # Run function
-  $shell_func "$active_mount_path" || true
+  local exit_code=0
+  $shell_func "$active_mount_path" || exit_code=$?
 
-  # Update cached image statuses
-  update_image_statuses
-
-  tput civis
-  force_clear=1
+  exit "$exit_code"
 }
 
 # Run build command helper

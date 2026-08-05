@@ -1,4 +1,4 @@
-﻿param(
+param(
   [string]$Workspace
 )
 
@@ -626,14 +626,18 @@ function Launch-Tool {
 
   [Console]::Clear()
   Write-Host "Launching container session..."
-  Write-Host "Close tmux session or type 'exit' inside the tmux window to return to TUI."
+  Write-Host "Close tmux session or type 'exit' inside the tmux window to return to command line."
   Write-Host ""
 
   & $ShellFunc -Path $script:AI_DOCKER_ACTIVE_WORKSPACE
+  $exitCode = $LASTEXITCODE
 
   while ([Console]::KeyAvailable) {
     [void][Console]::ReadKey($true)
   }
+
+  if ($null -eq $exitCode) { $exitCode = 0 }
+  exit $exitCode
 }
 
 function Run-Build {
