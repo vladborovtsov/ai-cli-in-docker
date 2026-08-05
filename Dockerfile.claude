@@ -12,9 +12,9 @@ RUN apt-install $(cat /usr/local/share/apt-packages-common) \
     gcc \
     libc-dev
 
-# Compile getuid bypass library for root restriction bypass (process-specific)
-RUN printf '#define _GNU_SOURCE\n#include <unistd.h>\n#include <sys/types.h>\n#include <string.h>\nextern char *program_invocation_short_name;\nuid_t getuid(void) {\n    if (program_invocation_short_name && (strcmp(program_invocation_short_name, "claude") == 0 || strcmp(program_invocation_short_name, "claude-real") == 0 || strcmp(program_invocation_short_name, "node") == 0)) return 1000;\n    return 0;\n}\nuid_t geteuid(void) {\n    if (program_invocation_short_name && (strcmp(program_invocation_short_name, "claude") == 0 || strcmp(program_invocation_short_name, "claude-real") == 0 || strcmp(program_invocation_short_name, "node") == 0)) return 1000;\n    return 0;\n}\n' > /tmp/mock_uid.c && \
-    gcc -shared -fPIC -o /usr/local/lib/libmockuid.so /tmp/mock_uid.c && \
+# Copy and compile getuid bypass library for root restriction bypass (process-specific)
+COPY src/mock_uid.c /tmp/mock_uid.c
+RUN gcc -shared -fPIC -o /usr/local/lib/libmockuid.so /tmp/mock_uid.c && \
     rm /tmp/mock_uid.c
 
 # Install lazygit
