@@ -1,4 +1,4 @@
-# Dot-source this file to add AI Docker helpers to your PowerShell session.
+﻿# Dot-source this file to add AI Docker helpers to your PowerShell session.
 # Usage:
 #   . .\activate.ps1
 #   codex-docker-build
@@ -799,7 +799,7 @@ function claude-docker-shell {
     TMUX_SESSION = $workspaceLeaf
     AI_DOCKER_PROFILE = $script:AI_DOCKER_PROFILE
     AI_NAME = 'claude'
-    AI_COMMAND = 'claude'
+    AI_COMMAND = $(if ($env:AI_COMMAND) { $env:AI_COMMAND } else { 'claude' })
   }
 
   $runParams = @{

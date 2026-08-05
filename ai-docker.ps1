@@ -1,4 +1,4 @@
-param(
+﻿param(
   [string]$Workspace
 )
 
@@ -68,6 +68,8 @@ function Get-MainItems {
   $profile = if ($script:AI_DOCKER_PROFILE) { $script:AI_DOCKER_PROFILE } else { "default" }
   return @(
     "💬 Launch Claude Code",
+    "🤖 Launch Claude Code (Auto Mode)",
+    "💀 Launch Claude Code (Dangerous Mode)",
     "💬 Launch Antigravity CLI",
     "💬 Launch OpenAI Codex",
     "💬 Launch OpenCode",
@@ -311,6 +313,8 @@ function Render-Menu {
 
       $statuses = @(
         $claudeStatus,
+        $claudeStatus,
+        $claudeStatus,
         $antigravityStatus,
         $codexStatus,
         $opencodeStatus,
@@ -335,7 +339,7 @@ function Render-Menu {
           Write-Host "    " -NoNewline
         }
 
-        if ($i -lt 4) {
+        if ($i -lt 6) {
           $status = $statuses[$i]
           $statusColor = if ($status -eq "Built") { "Green" } else { "Red" }
 
@@ -526,8 +530,11 @@ function Move-Selection {
   if ($direction -eq "UP") {
     $script:selected_index = ($script:selected_index - 1 + $len) % $len
     # Skip dividers
-    if ($script:current_menu -eq "main" -and $script:selected_index -eq 6) {
-      $script:selected_index = ($script:selected_index - 1 + $len) % $len
+    if ($script:current_menu -eq "main") {
+      $mainItems = Get-MainItems
+      if ($mainItems[$script:selected_index].StartsWith("──")) {
+        $script:selected_index = ($script:selected_index - 1 + $len) % $len
+      }
     } elseif ($script:current_menu -eq "workspace") {
       $workspaceMenu = Get-WorkspaceItems
       if ($workspaceMenu.Items[$script:selected_index].StartsWith("──")) {
@@ -542,8 +549,11 @@ function Move-Selection {
   } else {
     $script:selected_index = ($script:selected_index + 1) % $len
     # Skip dividers
-    if ($script:current_menu -eq "main" -and $script:selected_index -eq 6) {
-      $script:selected_index = ($script:selected_index + 1) % $len
+    if ($script:current_menu -eq "main") {
+      $mainItems = Get-MainItems
+      if ($mainItems[$script:selected_index].StartsWith("──")) {
+        $script:selected_index = ($script:selected_index + 1) % $len
+      }
     } elseif ($script:current_menu -eq "workspace") {
       $workspaceMenu = Get-WorkspaceItems
       if ($workspaceMenu.Items[$script:selected_index].StartsWith("──")) {
@@ -675,16 +685,26 @@ function Handle-Select {
     "main" {
       switch ($script:selected_index) {
         0 { Launch-Tool -ImageName $script:CLAUDE_IMAGE_NAME -BuildFunc { claude-docker-build } -ShellFunc { param($Path) claude-docker-shell -Path $Path } }
-        1 { Launch-Tool -ImageName $script:ANTIGRAVITY_IMAGE_NAME -BuildFunc { antigravity-docker-build } -ShellFunc { param($Path) antigravity-docker-shell -Path $Path } }
-        2 { Launch-Tool -ImageName $script:CODEX_IMAGE_NAME -BuildFunc { codex-docker-build } -ShellFunc { param($Path) codex-docker-shell -Path $Path } }
-        3 { Launch-Tool -ImageName $script:OPENCODE_IMAGE_NAME -BuildFunc { opencode-docker-build } -ShellFunc { param($Path) opencode-docker-shell -Path $Path } }
-        4 { $script:current_menu = "workspace"; $script:selected_index = 0 }
-        5 { $script:current_menu = "profile"; $script:selected_index = 0 }
-        6 { } # Divider
-        7 { $script:current_menu = "build"; $script:selected_index = 0 }
-        8 { $script:current_menu = "config"; $script:selected_index = 0 }
-        9 { $script:current_menu = "cleanup"; $script:selected_index = 0 }
-        10 { return $true } # Exit
+        1 {
+            $env:AI_COMMAND = 'claude --enable-auto-mode'
+            Launch-Tool -ImageName $script:CLAUDE_IMAGE_NAME -BuildFunc { claude-docker-build } -ShellFunc { param($Path) claude-docker-shell -Path $Path }
+            Remove-Item Env:\AI_COMMAND -ErrorAction SilentlyContinue
+        }
+        2 {
+            $env:AI_COMMAND = 'claude --dangerously-skip-permissions'
+            Launch-Tool -ImageName $script:CLAUDE_IMAGE_NAME -BuildFunc { claude-docker-build } -ShellFunc { param($Path) claude-docker-shell -Path $Path }
+            Remove-Item Env:\AI_COMMAND -ErrorAction SilentlyContinue
+        }
+        3 { Launch-Tool -ImageName $script:ANTIGRAVITY_IMAGE_NAME -BuildFunc { antigravity-docker-build } -ShellFunc { param($Path) antigravity-docker-shell -Path $Path } }
+        4 { Launch-Tool -ImageName $script:CODEX_IMAGE_NAME -BuildFunc { codex-docker-build } -ShellFunc { param($Path) codex-docker-shell -Path $Path } }
+        5 { Launch-Tool -ImageName $script:OPENCODE_IMAGE_NAME -BuildFunc { opencode-docker-build } -ShellFunc { param($Path) opencode-docker-shell -Path $Path } }
+        6 { $script:current_menu = "workspace"; $script:selected_index = 0 }
+        7 { $script:current_menu = "profile"; $script:selected_index = 0 }
+        8 { } # Divider
+        9 { $script:current_menu = "build"; $script:selected_index = 0 }
+        10 { $script:current_menu = "config"; $script:selected_index = 0 }
+        11 { $script:current_menu = "cleanup"; $script:selected_index = 0 }
+        12 { return $true } # Exit
       }
     }
     "profile" {

@@ -234,6 +234,8 @@ load_workspace_menu() {
 load_main_menu() {
   main_items=(
     "💬 Launch Claude Code"
+    "🤖 Launch Claude Code (Auto Mode)"
+    "💀 Launch Claude Code (Dangerous Mode)"
     "💬 Launch Antigravity CLI"
     "💬 Launch OpenAI Codex"
     "💬 Launch OpenCode"
@@ -395,6 +397,8 @@ render_menu() {
 
       local statuses=(
         "[$claude_built]"
+        "[$claude_built]"
+        "[$claude_built]"
         "[$antigravity_built]"
         "[$codex_built]"
         "[$opencode_built]"
@@ -409,7 +413,7 @@ render_menu() {
 
       for i in "${!main_items[@]}"; do
         local item_text="${main_items[$i]}"
-        if [ "$i" -lt 4 ]; then
+        if [ "$i" -lt 6 ]; then
           if [ "$i" -eq "$selected" ]; then
             printf "  ${CYAN}▸${RESET} ${BOLD}%-32s${RESET} %s\n" "$item_text" "${statuses[$i]}"
           else
@@ -578,7 +582,7 @@ move_selection() {
   if [ "$dir" = "UP" ]; then
     selected_index=$(( (selected_index - 1 + len) % len ))
     # Skip dividers
-    if [ "$current_menu" = "main" ] && [ "$selected_index" -eq 6 ]; then
+    if [ "$current_menu" = "main" ] && [[ "${main_items[$selected_index]}" == ──* ]]; then
       selected_index=$(( (selected_index - 1 + len) % len ))
     elif [ "$current_menu" = "workspace" ] && [[ "${workspace_items[$selected_index]}" == ──* ]]; then
       selected_index=$(( (selected_index - 1 + len) % len ))
@@ -588,7 +592,7 @@ move_selection() {
   else
     selected_index=$(( (selected_index + 1) % len ))
     # Skip dividers
-    if [ "$current_menu" = "main" ] && [ "$selected_index" -eq 6 ]; then
+    if [ "$current_menu" = "main" ] && [[ "${main_items[$selected_index]}" == ──* ]]; then
       selected_index=$(( (selected_index + 1) % len ))
     elif [ "$current_menu" = "workspace" ] && [[ "${workspace_items[$selected_index]}" == ──* ]]; then
       selected_index=$(( (selected_index + 1) % len ))
@@ -731,16 +735,18 @@ handle_select() {
     main)
       case "$selected_index" in
         0) launch_tool "$CLAUDE_IMAGE_NAME" claude-docker-build claude-docker-shell ;;
-        1) launch_tool "$ANTIGRAVITY_IMAGE_NAME" antigravity-docker-build antigravity-docker-shell ;;
-        2) launch_tool "$CODEX_IMAGE_NAME" codex-docker-build codex-docker-shell ;;
-        3) launch_tool "$OPENCODE_IMAGE_NAME" opencode-docker-build opencode-docker-shell ;;
-        4) current_menu="workspace"; selected_index=0; force_clear=1 ;;
-        5) current_menu="profile"; selected_index=0; force_clear=1 ;;
-        6) ;; # divider
-        7) current_menu="build"; selected_index=0; force_clear=1 ;;
-        8) current_menu="config"; selected_index=0; force_clear=1 ;;
-        9) current_menu="cleanup"; selected_index=0; force_clear=1 ;;
-        10) exit 0 ;;
+        1) AI_COMMAND="claude --enable-auto-mode" launch_tool "$CLAUDE_IMAGE_NAME" claude-docker-build claude-docker-shell ;;
+        2) AI_COMMAND="claude --dangerously-skip-permissions" launch_tool "$CLAUDE_IMAGE_NAME" claude-docker-build claude-docker-shell ;;
+        3) launch_tool "$ANTIGRAVITY_IMAGE_NAME" antigravity-docker-build antigravity-docker-shell ;;
+        4) launch_tool "$CODEX_IMAGE_NAME" codex-docker-build codex-docker-shell ;;
+        5) launch_tool "$OPENCODE_IMAGE_NAME" opencode-docker-build opencode-docker-shell ;;
+        6) current_menu="workspace"; selected_index=0; force_clear=1 ;;
+        7) current_menu="profile"; selected_index=0; force_clear=1 ;;
+        8) ;; # divider
+        9) current_menu="build"; selected_index=0; force_clear=1 ;;
+        10) current_menu="config"; selected_index=0; force_clear=1 ;;
+        11) current_menu="cleanup"; selected_index=0; force_clear=1 ;;
+        12) exit 0 ;;
       esac
       ;;
     profile)

@@ -124,20 +124,20 @@ class TestBashTui(unittest.TestCase):
             success, _ = self.read_until(master_fd, ["[Use ↑/↓ or j/k to navigate", "▸ 💬 Launch Claude Code"], timeout=3.0)
             self.assertTrue(success)
 
-            # Send 'j' to navigate down to Antigravity CLI
+            # Send 'j' to navigate down to Claude Code (Auto Mode)
             os.write(master_fd, b"j")
-            success, clean_output = self.read_until(master_fd, ["▸ 💬 Launch Antigravity CLI"], timeout=2.0)
-            self.assertTrue(success, f"Antigravity was not selected. Output: {clean_output}")
+            success, clean_output = self.read_until(master_fd, ["▸ 🤖 Launch Claude Code (Auto Mode)"], timeout=2.0)
+            self.assertTrue(success, f"Claude Code (Auto Mode) was not selected. Output: {clean_output}")
 
-            # Send Down arrow sequence to navigate down to OpenAI Codex
+            # Send Down arrow sequence to navigate down to Claude Code (Dangerous Mode)
             os.write(master_fd, b"\x1b[B")
-            success, clean_output = self.read_until(master_fd, ["▸ 💬 Launch OpenAI Codex"], timeout=2.0)
-            self.assertTrue(success, f"Codex was not selected. Output: {clean_output}")
+            success, clean_output = self.read_until(master_fd, ["▸ 💀 Launch Claude Code (Dangerous Mode)"], timeout=2.0)
+            self.assertTrue(success, f"Claude Code (Dangerous Mode) was not selected. Output: {clean_output}")
 
-            # Send 'k' to move back up to Antigravity CLI
+            # Send 'k' to move back up to Claude Code (Auto Mode)
             os.write(master_fd, b"k")
-            success, clean_output = self.read_until(master_fd, ["▸ 💬 Launch Antigravity CLI"], timeout=2.0)
-            self.assertTrue(success, f"Antigravity was not re-selected. Output: {clean_output}")
+            success, clean_output = self.read_until(master_fd, ["▸ 🤖 Launch Claude Code (Auto Mode)"], timeout=2.0)
+            self.assertTrue(success, f"Claude Code (Auto Mode) was not re-selected. Output: {clean_output}")
 
             # Quit
             os.write(master_fd, b"q")
@@ -181,6 +181,14 @@ class TestBashTui(unittest.TestCase):
             self.assertTrue(success)
 
             # Move down index-by-index with verification
+            # Move to Claude Auto Mode
+            os.write(master_fd, b"j")
+            self.assertTrue(self.read_until(master_fd, ["▸ 🤖 Launch Claude Code (Auto Mode)"], timeout=1.0)[0])
+
+            # Move to Claude Dangerous Mode
+            os.write(master_fd, b"j")
+            self.assertTrue(self.read_until(master_fd, ["▸ 💀 Launch Claude Code (Dangerous Mode)"], timeout=1.0)[0])
+
             # Move to Antigravity
             os.write(master_fd, b"j")
             self.assertTrue(self.read_until(master_fd, ["▸ 💬 Launch Antigravity CLI"], timeout=1.0)[0])
@@ -266,9 +274,9 @@ class TestBashTui(unittest.TestCase):
             success, clean_output = self.read_until(master_fd, ["[Use ↑/↓ or j/k to navigate", "Profile:   custom_profile"], timeout=3.0)
             self.assertTrue(success, f"Main menu did not load correctly. Output: {clean_output}")
 
-            # Navigate to Change Workspace Directory (index 4 in main_items)
-            # main_items has: 0: Claude, 1: Antigravity, 2: Codex, 3: OpenCode, 4: Change Workspace
-            for _ in range(4):
+            # Navigate to Change Workspace Directory (index 6 in main_items)
+            # main_items has: 0: Claude, 1: Claude Auto, 2: Claude Dangerous, 3: Antigravity, 4: Codex, 5: OpenCode, 6: Change Workspace
+            for _ in range(6):
                 os.write(master_fd, b"j")
                 time.sleep(0.1)
 
