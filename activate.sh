@@ -775,7 +775,7 @@ claude-docker-shell() {
     -e "TMUX_SESSION=${workspace_name}"
     -e "AI_DOCKER_PROFILE=${AI_DOCKER_PROFILE}"
     -e AI_NAME=claude
-    -e AI_COMMAND="${AI_COMMAND:-claude}"
+    -e AI_COMMAND="${AI_COMMAND:-claude --continue}"
     "$CLAUDE_IMAGE_NAME"
     -lc "ln -sf /root/.claude/claude.json /root/.claude.json; start-tmux-layout"
   )

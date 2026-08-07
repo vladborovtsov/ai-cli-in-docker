@@ -138,5 +138,10 @@ class TestBashHelpers(unittest.TestCase):
         res_outside = self.run_bash('_ai_docker_get_unique_workspace_name "/opt/tools/helper"')
         self.assertEqual(res_outside.stdout.strip(), "opt-tools-helper")
 
+    def test_claude_command_default(self):
+        res = self.run_bash("type claude-docker-shell")
+        self.assertEqual(res.returncode, 0)
+        self.assertIn("claude --continue", res.stdout)
+
 if __name__ == "__main__":
     unittest.main()
