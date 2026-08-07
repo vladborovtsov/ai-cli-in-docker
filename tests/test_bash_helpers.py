@@ -141,7 +141,7 @@ class TestBashHelpers(unittest.TestCase):
     def test_claude_command_default(self):
         res = self.run_bash("type claude-docker-shell")
         self.assertEqual(res.returncode, 0)
-        self.assertIn("claude --continue", res.stdout)
+        self.assertIn("claude --continue || claude", res.stdout)
 
 if __name__ == "__main__":
     unittest.main()

@@ -689,17 +689,17 @@ function Handle-Select {
     "main" {
       switch ($script:selected_index) {
         0 {
-            $env:AI_COMMAND = 'claude --continue'
+            $env:AI_COMMAND = 'claude --continue || claude'
             Launch-Tool -ImageName $script:CLAUDE_IMAGE_NAME -BuildFunc { claude-docker-build } -ShellFunc { param($Path) claude-docker-shell -Path $Path }
             Remove-Item Env:\AI_COMMAND -ErrorAction SilentlyContinue
         }
         1 {
-            $env:AI_COMMAND = 'claude --permission-mode auto --continue'
+            $env:AI_COMMAND = 'claude --permission-mode auto --continue || claude --permission-mode auto'
             Launch-Tool -ImageName $script:CLAUDE_IMAGE_NAME -BuildFunc { claude-docker-build } -ShellFunc { param($Path) claude-docker-shell -Path $Path }
             Remove-Item Env:\AI_COMMAND -ErrorAction SilentlyContinue
         }
         2 {
-            $env:AI_COMMAND = 'claude --dangerously-skip-permissions --continue'
+            $env:AI_COMMAND = 'claude --dangerously-skip-permissions --continue || claude --dangerously-skip-permissions'
             Launch-Tool -ImageName $script:CLAUDE_IMAGE_NAME -BuildFunc { claude-docker-build } -ShellFunc { param($Path) claude-docker-shell -Path $Path }
             Remove-Item Env:\AI_COMMAND -ErrorAction SilentlyContinue
         }

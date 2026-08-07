@@ -6,7 +6,7 @@ Run AI CLI tools (OpenAI Codex, Google Antigravity, Claude, OpenCode) inside Doc
 - [Why AI CLI in Docker?](WHY.md): Rationale behind this project.
 - `Dockerfile.codex`: Based on `ghcr.io/openai/codex-universal` with `@openai/codex` preinstalled.
 - `Dockerfile.antigravity`: Based on `ubuntu:24.04` with the Google Antigravity CLI preinstalled.
-- `Dockerfile.claude`: Based on `ubuntu:24.04` with `@anthropic-ai/claude-code` preinstalled. Supports launching in three variants with `--continue` enabled by default: Standard Mode (💬 with `claude --continue`), Auto Mode (🤖 with `claude --permission-mode auto --continue`), and Dangerous Mode (💀 with `claude --dangerously-skip-permissions --continue` using a targeted `LD_PRELOAD` root privilege bypass).
+- `Dockerfile.claude`: Based on `ubuntu:24.04` with `@anthropic-ai/claude-code` preinstalled. Supports launching in three variants with automatic fallback to starting a new session if no prior conversation exists: Standard Mode (💬 with `claude --continue || claude`), Auto Mode (🤖 with `claude --permission-mode auto --continue || claude --permission-mode auto`), and Dangerous Mode (💀 with `claude --dangerously-skip-permissions --continue || claude --dangerously-skip-permissions` using a targeted `LD_PRELOAD` root privilege bypass).
 - `Dockerfile.opencode`: Based on `ubuntu:24.04` with `opencode-ai` preinstalled.
 - `activate.sh`: Bash/Zsh helper functions.
 - `ai-docker.sh`: Interactive Bash TUI.

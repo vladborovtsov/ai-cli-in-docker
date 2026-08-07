@@ -799,7 +799,7 @@ function claude-docker-shell {
     TMUX_SESSION = $workspaceLeaf
     AI_DOCKER_PROFILE = $script:AI_DOCKER_PROFILE
     AI_NAME = 'claude'
-    AI_COMMAND = $(if ($env:AI_COMMAND) { $env:AI_COMMAND } else { 'claude --continue' })
+    AI_COMMAND = $(if ($env:AI_COMMAND) { $env:AI_COMMAND } else { 'claude --continue || claude' })
   }
 
   $runParams = @{

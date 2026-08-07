@@ -731,9 +731,9 @@ handle_select() {
   case "$current_menu" in
     main)
       case "$selected_index" in
-        0) AI_COMMAND="claude --continue" launch_tool "$CLAUDE_IMAGE_NAME" claude-docker-build claude-docker-shell ;;
-        1) AI_COMMAND="claude --permission-mode auto --continue" launch_tool "$CLAUDE_IMAGE_NAME" claude-docker-build claude-docker-shell ;;
-        2) AI_COMMAND="claude --dangerously-skip-permissions --continue" launch_tool "$CLAUDE_IMAGE_NAME" claude-docker-build claude-docker-shell ;;
+        0) AI_COMMAND="claude --continue || claude" launch_tool "$CLAUDE_IMAGE_NAME" claude-docker-build claude-docker-shell ;;
+        1) AI_COMMAND="claude --permission-mode auto --continue || claude --permission-mode auto" launch_tool "$CLAUDE_IMAGE_NAME" claude-docker-build claude-docker-shell ;;
+        2) AI_COMMAND="claude --dangerously-skip-permissions --continue || claude --dangerously-skip-permissions" launch_tool "$CLAUDE_IMAGE_NAME" claude-docker-build claude-docker-shell ;;
         3) launch_tool "$ANTIGRAVITY_IMAGE_NAME" antigravity-docker-build antigravity-docker-shell ;;
         4) launch_tool "$CODEX_IMAGE_NAME" codex-docker-build codex-docker-shell ;;
         5) launch_tool "$OPENCODE_IMAGE_NAME" opencode-docker-build opencode-docker-shell ;;
