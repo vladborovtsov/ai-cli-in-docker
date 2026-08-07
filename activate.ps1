@@ -324,6 +324,23 @@ function _ai_docker_update_recents {
     $candidates += Get-Content -LiteralPath $script:AI_DOCKER_RECENTS_FILE -ErrorAction SilentlyContinue
   }
 
+  $mapFile = Join-Path (Join-Path $HOME ".ai-docker-profiles") "project-profiles"
+  if (Test-Path -LiteralPath $mapFile -PathType Leaf) {
+    $lines = Get-Content -LiteralPath $mapFile -ErrorAction SilentlyContinue
+    if ($lines) {
+      foreach ($line in $lines) {
+        if ([string]::IsNullOrWhiteSpace($line) -or $line.StartsWith("#")) { continue }
+        $lastColon = $line.LastIndexOf(':')
+        if ($lastColon -gt 0) {
+          $pPath = $line.Substring(0, $lastColon)
+          if (-not [string]::IsNullOrWhiteSpace($pPath) -and (Test-Path -LiteralPath $pPath -PathType Container)) {
+            $candidates += $pPath
+          }
+        }
+      }
+    }
+  }
+
   $seen = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::OrdinalIgnoreCase)
   $unique = New-Object 'System.Collections.Generic.List[string]'
 
@@ -336,9 +353,10 @@ function _ai_docker_update_recents {
     }
 
     $resolved = _ai_docker_resolve_dir -Path $candidate
+    $maxRecents = if ($env:AI_DOCKER_MAX_RECENTS) { [int]$env:AI_DOCKER_MAX_RECENTS } else { 30 }
     if ($seen.Add($resolved)) {
       [void]$unique.Add($resolved)
-      if ($unique.Count -ge 10) {
+      if ($unique.Count -ge $maxRecents) {
         break
       }
     }

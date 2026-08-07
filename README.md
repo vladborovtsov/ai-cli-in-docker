@@ -151,7 +151,9 @@ Specifically, for the active profile:
 
 Each host config directory includes a `docker-env.env` file that is passed to the container.
 
-#### Managing Profiles
+#### Managing Profiles and Recent Workspaces
+- **Recent Projects Menu**: Select `🕒 Recent Projects...` on the main screen to view previously worked projects, their profile mappings, and instantly switch ("chdir") the active workspace.
+- **Configurable History Limit**: By default, recents history retains up to **30** unique projects. You can customize this by setting `export AI_DOCKER_MAX_RECENTS=50` (or `$env:AI_DOCKER_MAX_RECENTS=50` in PowerShell).
 - **Switching Profiles via TUI**: Select `👤 Switch Active Profile` on the main screen to change profiles or create a new one.
 - **Environment Override**: Set the `AI_DOCKER_PROFILE` environment variable in your terminal session to override the active profile:
   ```bash

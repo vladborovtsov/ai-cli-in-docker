@@ -73,7 +73,9 @@ function Get-MainItems {
     "💬 Launch Antigravity CLI",
     "💬 Launch OpenAI Codex",
     "💬 Launch OpenCode",
+    "──────────────────────────────────────────────────",
     "📁 Change Workspace Directory...",
+    "🕒 Recent Projects...",
     "👤 Switch Active Profile (Current: $profile)",
     "──────────────────────────────────────────────────",
     "🛠️  Rebuild/Update Images...",
@@ -228,6 +230,78 @@ function Get-WorkspaceItems {
         [void]$paths.Add($resolved)
       }
     }
+  }
+
+  [void]$items.Add("⬅️  Back to Main Menu")
+  [void]$paths.Add("BACK")
+
+  return [PSCustomObject]@{
+    Items = $items.ToArray()
+    Paths = $paths.ToArray()
+  }
+}
+
+function Get-RecentsItems {
+  param(
+    [int]$Width = 80
+  )
+  $items = New-Object System.Collections.Generic.List[string]
+  $paths = New-Object System.Collections.Generic.List[string]
+
+  $maxPathLen = $Width - 25
+  if ($maxPathLen -lt 15) { $maxPathLen = 15 }
+
+  $candidates = New-Object System.Collections.Generic.List[string]
+
+  if (Test-Path -LiteralPath $script:AI_DOCKER_RECENTS_FILE -PathType Leaf) {
+    foreach ($line in (Get-Content -LiteralPath $script:AI_DOCKER_RECENTS_FILE -ErrorAction SilentlyContinue)) {
+      if (-not [string]::IsNullOrWhiteSpace($line) -and (Test-Path -LiteralPath $line -PathType Container)) {
+        [void]$candidates.Add($line)
+      }
+    }
+  }
+
+  $mapFile = Join-Path (Join-Path $HOME ".ai-docker-profiles") "project-profiles"
+  if (Test-Path -LiteralPath $mapFile -PathType Leaf) {
+    $lines = Get-Content -LiteralPath $mapFile -ErrorAction SilentlyContinue
+    if ($lines) {
+      foreach ($line in $lines) {
+        if ([string]::IsNullOrWhiteSpace($line) -or $line.StartsWith("#")) { continue }
+        $lastColon = $line.LastIndexOf(':')
+        if ($lastColon -gt 0) {
+          $pPath = $line.Substring(0, $lastColon)
+          if (-not [string]::IsNullOrWhiteSpace($pPath) -and (Test-Path -LiteralPath $pPath -PathType Container)) {
+            [void]$candidates.Add($pPath)
+          }
+        }
+      }
+    }
+  }
+
+  $maxRecents = if ($env:AI_DOCKER_MAX_RECENTS) { [int]$env:AI_DOCKER_MAX_RECENTS } else { 30 }
+  $seen = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::OrdinalIgnoreCase)
+
+  foreach ($candidate in $candidates) {
+    if ($items.Count -ge $maxRecents) {
+      break
+    }
+    $resolved = _ai_docker_resolve_dir -Path $candidate
+    if ($seen.Add($resolved)) {
+      $recentProfile = ""
+      if ($resolved -ne $HOME) {
+        $pProf = _ai_docker_get_project_profile -TargetPath $resolved
+        $recentProfile = " (profile: " + (if ($pProf) { $pProf } else { "default" }) + ")"
+      }
+      $truncatedRecent = Get-TruncatedPath -Path $resolved -MaxLength $maxPathLen
+      $activeTag = if ($resolved -eq $script:AI_DOCKER_ACTIVE_WORKSPACE) { " (Active)" } else { "" }
+      [void]$items.Add("🕒 ${truncatedRecent}${recentProfile}${activeTag}")
+      [void]$paths.Add($resolved)
+    }
+  }
+
+  if ($items.Count -gt 0) {
+    [void]$items.Add("──────────────────────────────────────────────────")
+    [void]$paths.Add("DIVIDER")
   }
 
   [void]$items.Add("⬅️  Back to Main Menu")
@@ -490,6 +564,32 @@ function Render-Menu {
       }
     }
 
+    "recents" {
+      Write-Host "  Select a recent project to set as active workspace:" -ForegroundColor Gray
+      Write-Host ""
+
+      $recentsMenu = Get-RecentsItems -Width $cols
+      $items = $recentsMenu.Items
+
+      for ($i = 0; $i -lt $items.Length; $i++) {
+        $itemText = $items[$i]
+        $isSelected = ($i -eq $selected)
+
+        if ($itemText.StartsWith("──")) {
+          $divLine = "─" * ($insideWidth - 4)
+          Write-Host "  $divLine" -ForegroundColor Gray
+          continue
+        }
+
+        if ($isSelected) {
+          Write-Host "  ▸ " -ForegroundColor Cyan -NoNewline
+          Write-Host $itemText -ForegroundColor White
+        } else {
+          Write-Host "    $itemText" -ForegroundColor Gray
+        }
+      }
+    }
+
     "profile_actions" {
       Write-Host "  Profile Actions for: " -NoNewline
       Write-Host $script:selected_profile_name -ForegroundColor Green
@@ -540,6 +640,11 @@ function Move-Selection {
       if ($workspaceMenu.Items[$script:selected_index].StartsWith("──")) {
         $script:selected_index = ($script:selected_index - 1 + $len) % $len
       }
+    } elseif ($script:current_menu -eq "recents") {
+      $recentsMenu = Get-RecentsItems
+      if ($recentsMenu.Items[$script:selected_index].StartsWith("──")) {
+        $script:selected_index = ($script:selected_index - 1 + $len) % $len
+      }
     } elseif ($script:current_menu -eq "profile") {
       $profileMenu = Get-ProfileItems
       if ($profileMenu.Items[$script:selected_index].StartsWith("──")) {
@@ -557,6 +662,11 @@ function Move-Selection {
     } elseif ($script:current_menu -eq "workspace") {
       $workspaceMenu = Get-WorkspaceItems
       if ($workspaceMenu.Items[$script:selected_index].StartsWith("──")) {
+        $script:selected_index = ($script:selected_index + 1) % $len
+      }
+    } elseif ($script:current_menu -eq "recents") {
+      $recentsMenu = Get-RecentsItems
+      if ($recentsMenu.Items[$script:selected_index].StartsWith("──")) {
         $script:selected_index = ($script:selected_index + 1) % $len
       }
     } elseif ($script:current_menu -eq "profile") {
@@ -582,6 +692,10 @@ function Get-MenuLength {
     "workspace" {
       $workspaceMenu = Get-WorkspaceItems
       return $workspaceMenu.Items.Length
+    }
+    "recents" {
+      $recentsMenu = Get-RecentsItems
+      return $recentsMenu.Items.Length
     }
   }
 }
@@ -706,13 +820,15 @@ function Handle-Select {
         3 { Launch-Tool -ImageName $script:ANTIGRAVITY_IMAGE_NAME -BuildFunc { antigravity-docker-build } -ShellFunc { param($Path) antigravity-docker-shell -Path $Path } }
         4 { Launch-Tool -ImageName $script:CODEX_IMAGE_NAME -BuildFunc { codex-docker-build } -ShellFunc { param($Path) codex-docker-shell -Path $Path } }
         5 { Launch-Tool -ImageName $script:OPENCODE_IMAGE_NAME -BuildFunc { opencode-docker-build } -ShellFunc { param($Path) opencode-docker-shell -Path $Path } }
-        6 { $script:current_menu = "workspace"; $script:selected_index = 0 }
-        7 { $script:current_menu = "profile"; $script:selected_index = 0 }
-        8 { } # Divider
-        9 { $script:current_menu = "build"; $script:selected_index = 0 }
-        10 { $script:current_menu = "config"; $script:selected_index = 0 }
-        11 { $script:current_menu = "cleanup"; $script:selected_index = 0 }
-        12 { return $true } # Exit
+        6 { } # Divider
+        7 { $script:current_menu = "workspace"; $script:selected_index = 0 }
+        8 { $script:current_menu = "recents"; $script:selected_index = 0 }
+        9 { $script:current_menu = "profile"; $script:selected_index = 0 }
+        10 { } # Divider
+        11 { $script:current_menu = "build"; $script:selected_index = 0 }
+        12 { $script:current_menu = "config"; $script:selected_index = 0 }
+        13 { $script:current_menu = "cleanup"; $script:selected_index = 0 }
+        14 { return $true } # Exit
       }
     }
     "profile" {
@@ -1003,6 +1119,25 @@ function Handle-Select {
           }
           Start-Sleep -Milliseconds 1500
         }
+        "DIVIDER" { }
+        "BACK" { [void](Handle-Back) }
+        default {
+          if (Test-Path -LiteralPath $path -PathType Container) {
+            Activate-Workspace $path
+            _ai_docker_update_recents -PathToAdd $script:AI_DOCKER_ACTIVE_WORKSPACE
+            $script:current_menu = "main"
+            $script:selected_index = 0
+          } else {
+            Write-Host "Error: Directory '$path' no longer exists." -ForegroundColor Red
+            Start-Sleep -Milliseconds 1500
+          }
+        }
+      }
+    }
+    "recents" {
+      $recentsMenu = Get-RecentsItems
+      $path = $recentsMenu.Paths[$script:selected_index]
+      switch ($path) {
         "DIVIDER" { }
         "BACK" { [void](Handle-Back) }
         default {

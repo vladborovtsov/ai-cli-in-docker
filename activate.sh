@@ -286,9 +286,25 @@ _ai_docker_update_recents() {
     done < "$AI_DOCKER_RECENTS_FILE"
   fi
 
+  # Also include known project directories from project-profiles map file
+  local map_file="$HOME/.ai-docker-profiles/project-profiles"
+  if [ -f "$map_file" ]; then
+    while IFS= read -r line || [ -n "$line" ]; do
+      [[ "$line" =~ ^# ]] && continue
+      [ -z "$line" ] && continue
+      local p_path="${line%:*}"
+      if [ -n "$p_path" ] && [ -d "$p_path" ]; then
+        local resolved_map
+        resolved_map=$(cd "$p_path" 2>/dev/null && pwd || echo "$p_path")
+        dirs+=("$resolved_map")
+      fi
+    done < "$map_file"
+  fi
+
+  local max_recents="${AI_DOCKER_MAX_RECENTS:-30}"
   local unique_dirs=()
   for d in "${dirs[@]}"; do
-    if [ "${#unique_dirs[@]}" -ge 10 ]; then
+    if [ "${#unique_dirs[@]}" -ge "$max_recents" ]; then
       break
     fi
     local dup=0

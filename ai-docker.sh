@@ -230,6 +230,84 @@ load_workspace_menu() {
   workspace_paths+=("BACK")
 }
 
+# Recent projects selection items
+recents_items=()
+recents_paths=()
+
+load_recents_menu() {
+  RECENTS_FILE="${AI_DOCKER_RECENTS_FILE:-$HOME/.ai-docker-recents}"
+  recents_items=()
+  recents_paths=()
+
+  local raw_dirs=()
+  if [ -f "$RECENTS_FILE" ]; then
+    while IFS= read -r dir || [ -n "$dir" ]; do
+      if [ -n "$dir" ] && [ -d "$dir" ]; then
+        raw_dirs+=("$dir")
+      fi
+    done < "$RECENTS_FILE"
+  fi
+
+  local map_file="$HOME/.ai-docker-profiles/project-profiles"
+  if [ -f "$map_file" ]; then
+    while IFS= read -r line || [ -n "$line" ]; do
+      [[ "$line" =~ ^# ]] && continue
+      [ -z "$line" ] && continue
+      local p_path="${line%:*}"
+      if [ -n "$p_path" ] && [ -d "$p_path" ]; then
+        raw_dirs+=("$p_path")
+      fi
+    done < "$map_file"
+  fi
+
+  local max_recents="${AI_DOCKER_MAX_RECENTS:-30}"
+  local seen=()
+
+  for dir in "${raw_dirs[@]}"; do
+    if [ "${#recents_items[@]}" -ge "$max_recents" ]; then
+      break
+    fi
+    local resolved
+    resolved=$(cd "$dir" 2>/dev/null && pwd || builtin echo "$dir")
+
+    local dup=0
+    if [ "${#seen[@]}" -gt 0 ]; then
+      for s in "${seen[@]}"; do
+        if [ "$s" = "$resolved" ]; then
+          dup=1
+          break
+        fi
+      done
+    fi
+
+    if [ "$dup" -eq 0 ]; then
+      seen+=("$resolved")
+      local r_profile=""
+      if [ "$resolved" != "$HOME" ]; then
+        local p_prof
+        p_prof=$(_ai_docker_get_project_profile "$resolved")
+        r_profile=" (profile: ${p_prof:-default})"
+      fi
+      local formatted_resolved
+      formatted_resolved=$(format_path "$resolved")
+      if [ "$resolved" = "$active_mount_path" ]; then
+        recents_items+=("🕒 ${formatted_resolved}${r_profile} (Active)")
+      else
+        recents_items+=("🕒 ${formatted_resolved}${r_profile}")
+      fi
+      recents_paths+=("$resolved")
+    fi
+  done
+
+  if [ "${#recents_items[@]}" -gt 0 ]; then
+    recents_items+=("──────────────────────────────────────────────────")
+    recents_paths+=("DIVIDER")
+  fi
+
+  recents_items+=("⬅️  Back to Main Menu")
+  recents_paths+=("BACK")
+}
+
 # Menu definition lists
 load_main_menu() {
   main_items=(
@@ -239,7 +317,9 @@ load_main_menu() {
     "💬 Launch Antigravity CLI"
     "💬 Launch OpenAI Codex"
     "💬 Launch OpenCode"
+    "──────────────────────────────────────────────────"
     "📁 Change Workspace Directory..."
+    "🕒 Recent Projects..."
     "👤 Switch Active Profile (Current: ${AI_DOCKER_PROFILE:-default})"
     "──────────────────────────────────────────────────"
     "🛠️  Rebuild/Update Images..."
@@ -331,10 +411,9 @@ get_menu_length() {
     config) echo "${#config_items[@]}" ;;
     cleanup) echo "${#cleanup_items[@]}" ;;
     workspace) load_workspace_menu; echo "${#workspace_items[@]}" ;;
+    recents) load_recents_menu; echo "${#recents_items[@]}" ;;
   esac
 }
-
-
 
 # Render the active menu
 render_menu() {
@@ -402,6 +481,7 @@ render_menu() {
         "[$antigravity_built]"
         "[$codex_built]"
         "[$opencode_built]"
+        ""
         ""
         ""
         ""
@@ -547,6 +627,36 @@ render_menu() {
       done
       ;;
 
+    recents)
+      echo -e "  ${BOLD}Select a recent project to set as active workspace:${RESET}"
+      echo ""
+      lines_printed=$((lines_printed + 2))
+
+      load_recents_menu
+
+      for i in "${!recents_items[@]}"; do
+        local item_text="${recents_items[$i]}"
+        if [ "$i" -eq "$selected" ]; then
+          if [[ "$item_text" == ──* ]]; then
+            local div_width=$((inside_width - 4))
+            local divider_line=$(repeat_char "─" "$div_width")
+            printf "  %s\n" "$divider_line"
+          else
+            printf "  ${CYAN}▸${RESET} ${BOLD}%s${RESET}\n" "$item_text"
+          fi
+        else
+          if [[ "$item_text" == ──* ]]; then
+            local div_width=$((inside_width - 4))
+            local divider_line=$(repeat_char "─" "$div_width")
+            printf "  %s\n" "$divider_line"
+          else
+            printf "    %s\n" "$item_text"
+          fi
+        fi
+        lines_printed=$((lines_printed + 1))
+      done
+      ;;
+
     profile_actions)
       echo -e "  ${BOLD}Profile Actions for: ${GREEN}${selected_profile_name}${RESET}"
       echo ""
@@ -586,6 +696,8 @@ move_selection() {
       selected_index=$(( (selected_index - 1 + len) % len ))
     elif [ "$current_menu" = "workspace" ] && [[ "${workspace_items[$selected_index]}" == ──* ]]; then
       selected_index=$(( (selected_index - 1 + len) % len ))
+    elif [ "$current_menu" = "recents" ] && [[ "${recents_items[$selected_index]}" == ──* ]]; then
+      selected_index=$(( (selected_index - 1 + len) % len ))
     elif [ "$current_menu" = "profile" ] && [[ "${profile_items[$selected_index]}" == ──* ]]; then
       selected_index=$(( (selected_index - 1 + len) % len ))
     fi
@@ -595,6 +707,8 @@ move_selection() {
     if [ "$current_menu" = "main" ] && [[ "${main_items[$selected_index]}" == ──* ]]; then
       selected_index=$(( (selected_index + 1) % len ))
     elif [ "$current_menu" = "workspace" ] && [[ "${workspace_items[$selected_index]}" == ──* ]]; then
+      selected_index=$(( (selected_index + 1) % len ))
+    elif [ "$current_menu" = "recents" ] && [[ "${recents_items[$selected_index]}" == ──* ]]; then
       selected_index=$(( (selected_index + 1) % len ))
     elif [ "$current_menu" = "profile" ] && [[ "${profile_items[$selected_index]}" == ──* ]]; then
       selected_index=$(( (selected_index + 1) % len ))
@@ -737,13 +851,15 @@ handle_select() {
         3) launch_tool "$ANTIGRAVITY_IMAGE_NAME" antigravity-docker-build antigravity-docker-shell ;;
         4) launch_tool "$CODEX_IMAGE_NAME" codex-docker-build codex-docker-shell ;;
         5) launch_tool "$OPENCODE_IMAGE_NAME" opencode-docker-build opencode-docker-shell ;;
-        6) current_menu="workspace"; selected_index=0; force_clear=1 ;;
-        7) current_menu="profile"; selected_index=0; force_clear=1 ;;
-        8) ;; # divider
-        9) current_menu="build"; selected_index=0; force_clear=1 ;;
-        10) current_menu="config"; selected_index=0; force_clear=1 ;;
-        11) current_menu="cleanup"; selected_index=0; force_clear=1 ;;
-        12) exit 0 ;;
+        6) ;; # divider
+        7) current_menu="workspace"; selected_index=0; force_clear=1 ;;
+        8) current_menu="recents"; selected_index=0; force_clear=1 ;;
+        9) current_menu="profile"; selected_index=0; force_clear=1 ;;
+        10) ;; # divider
+        11) current_menu="build"; selected_index=0; force_clear=1 ;;
+        12) current_menu="config"; selected_index=0; force_clear=1 ;;
+        13) current_menu="cleanup"; selected_index=0; force_clear=1 ;;
+        14) exit 0 ;;
       esac
       ;;
     profile)
@@ -1028,6 +1144,32 @@ handle_select() {
           ;;
       esac
       ;;
+    recents)
+      local path="${recents_paths[$selected_index]}"
+      case "$path" in
+        DIVIDER)
+          ;;
+        BACK)
+          handle_back
+          ;;
+        *)
+          if [ -d "$path" ]; then
+            activate_workspace "$path"
+            _ai_docker_update_recents "$active_mount_path"
+            current_menu="main"
+            selected_index=0
+            force_clear=1
+          else
+            tput cnorm
+            clear
+            echo -e "${RED}Error: Directory '$path' no longer exists.${RESET}"
+            sleep 1.5
+            tput civis
+            force_clear=1
+          fi
+          ;;
+      esac
+      ;;
   esac
 }
 
@@ -1069,6 +1211,8 @@ clear
 while true; do
   if [ "$current_menu" = "workspace" ]; then
     load_workspace_menu
+  elif [ "$current_menu" = "recents" ]; then
+    load_recents_menu
   fi
 
   # Use the overridden echo/printf buffering (0 subshells, 0 forks)

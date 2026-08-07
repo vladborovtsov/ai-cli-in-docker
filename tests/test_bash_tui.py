@@ -316,5 +316,86 @@ class TestBashTui(unittest.TestCase):
                 pass
             p.kill()
 
+    def test_recents_menu_navigation_and_selection(self):
+        # Create two mock project directories
+        proj_a = os.path.realpath(os.path.join(self.tmp_dir, "project_alpha"))
+        proj_b = os.path.realpath(os.path.join(self.tmp_dir, "project_beta"))
+        os.makedirs(proj_a, exist_ok=True)
+        os.makedirs(proj_b, exist_ok=True)
+
+        # Pre-populate recents file
+        recents_file = os.path.join(self.tmp_dir, ".ai-docker-recents")
+        with open(recents_file, "w") as f:
+            f.write(f"{proj_a}\n{proj_b}\n")
+
+        master_fd, slave_fd = pty.openpty()
+        p = subprocess.Popen(
+            [os.path.join(self.repo_dir, "ai-docker.sh")],
+            stdin=slave_fd,
+            stdout=slave_fd,
+            stderr=slave_fd,
+            close_fds=True,
+            text=True,
+            cwd=proj_a,
+            env=dict(os.environ, TERM="xterm-256color")
+        )
+        os.close(slave_fd)
+
+        try:
+            # Wait for main menu to render
+            success, clean_output = self.read_until(master_fd, ["Recent Projects"], timeout=3.0)
+            self.assertTrue(success, f"Main menu did not display Recent Projects. Output: {clean_output}")
+
+            # Navigate to Recent Projects (index 7)
+            for _ in range(7):
+                os.write(master_fd, b"j")
+                time.sleep(0.05)
+
+            # Hit Enter to open Recent Projects Submenu
+            os.write(master_fd, b"\r")
+
+            # Verify Recents menu rendered with both projects
+            success, clean_output = self.read_until(
+                master_fd,
+                ["Select a recent project", "project_alpha", "project_beta"],
+                timeout=3.0
+            )
+            self.assertTrue(success, f"Recent projects menu did not render correctly. Output: {clean_output}")
+
+            # Navigate down to project_beta (index 1) and press Enter to select
+            os.write(master_fd, b"j")
+            time.sleep(0.05)
+            os.write(master_fd, b"\r")
+
+            # Verify returning to main menu with project_beta active
+            success, clean_output = self.read_until(
+                master_fd,
+                ["AI CLI IN DOCKER - CONTROL TUI", "project_beta"],
+                timeout=3.0
+            )
+            self.assertTrue(success, f"Workspace did not update to project_beta on main menu. Output: {clean_output}")
+
+            # Quit
+            os.write(master_fd, b"q")
+
+            # Drain output to avoid deadlock
+            start_wait = time.time()
+            while p.poll() is None and (time.time() - start_wait < 2.0):
+                r, _, _ = select.select([master_fd], [], [], 0.05)
+                if master_fd in r:
+                    try:
+                        os.read(master_fd, 1024)
+                    except OSError:
+                        break
+
+            p.wait(timeout=1.0)
+            self.assertEqual(p.returncode, 0)
+        finally:
+            try:
+                os.close(master_fd)
+            except OSError:
+                pass
+            p.kill()
+
 if __name__ == "__main__":
     unittest.main()
