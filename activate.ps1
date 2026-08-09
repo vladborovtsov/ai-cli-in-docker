@@ -292,6 +292,7 @@ function ai-docker-profile {
   $currentPwd = (Get-Location).Path
   if (-not (_ai_docker_is_home_path -Path $currentPwd)) {
     _ai_docker_set_project_profile -TargetPath $currentPwd -ProfileName $Target
+    _ai_docker_update_recents -PathToAdd $currentPwd
     Write-Host "Profile '$Target' activated and mapped to current directory."
   } else {
     Write-Host "Profile '$Target' activated globally."

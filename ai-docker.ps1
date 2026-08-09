@@ -886,6 +886,7 @@ function Handle-Select {
           _ai_docker_load_profile -TargetProfile $script:selected_profile_name -Directory $script:AI_DOCKER_ACTIVE_WORKSPACE
           if ($script:AI_DOCKER_ACTIVE_WORKSPACE -ne $HOME) {
             _ai_docker_set_project_profile -TargetPath $script:AI_DOCKER_ACTIVE_WORKSPACE -ProfileName $script:selected_profile_name
+            _ai_docker_update_recents -PathToAdd $script:AI_DOCKER_ACTIVE_WORKSPACE
           }
           $script:current_menu = "main"
           $script:selected_index = 5

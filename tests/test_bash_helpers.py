@@ -106,6 +106,14 @@ class TestBashHelpers(unittest.TestCase):
         self.assertEqual(lines[0], dir2)
         self.assertEqual(lines[1], dir1)
 
+        # Reopening/reusing dir1 moves it back to the top
+        res = self.run_bash(f'_ai_docker_update_recents "{dir1}"')
+        self.assertEqual(res.returncode, 0)
+        with open(recents_file, "r") as f:
+            lines = [line.strip() for line in f.readlines()]
+        self.assertEqual(lines[0], dir1)
+        self.assertEqual(lines[1], dir2)
+
     def test_profile_command(self):
         # List profiles
         res = self.run_bash("ai-docker-profile")

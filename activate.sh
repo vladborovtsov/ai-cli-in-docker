@@ -236,6 +236,7 @@ ai-docker-profile() {
   
   if [ "$(pwd)" != "$HOME" ]; then
     _ai_docker_set_project_profile "$(pwd)" "$target"
+    _ai_docker_update_recents "$(pwd)"
     echo "Profile '$target' activated and mapped to current directory."
   else
     echo "Profile '$target' activated globally."

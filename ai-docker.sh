@@ -902,6 +902,7 @@ handle_select() {
             _ai_docker_load_profile "$name" "$active_mount_path"
             if [ "$active_mount_path" != "$HOME" ]; then
               _ai_docker_set_project_profile "$active_mount_path" "$name"
+              _ai_docker_update_recents "$active_mount_path"
             fi
             current_menu="main"
             selected_index=5
@@ -922,6 +923,7 @@ handle_select() {
           _ai_docker_load_profile "$selected_profile_name" "$active_mount_path"
           if [ "$active_mount_path" != "$HOME" ]; then
             _ai_docker_set_project_profile "$active_mount_path" "$selected_profile_name"
+            _ai_docker_update_recents "$active_mount_path"
           fi
           current_menu="main"
           selected_index=5
