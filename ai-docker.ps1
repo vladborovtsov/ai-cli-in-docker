@@ -15,6 +15,7 @@ if (-not (Test-Path -LiteralPath $activatePath -PathType Leaf)) {
 }
 
 . $activatePath
+_ai_docker_migrate_project_ssh_settings
 
 function Activate-Workspace {
   param([string]$targetPath)
@@ -66,6 +67,10 @@ $script:profileActionItems = @(
 
 function Get-MainItems {
   $profile = if ($script:AI_DOCKER_PROFILE) { $script:AI_DOCKER_PROFILE } else { "default" }
+  $sshState = "Disabled"
+  if (_ai_docker_get_project_ssh_agent -TargetPath $script:AI_DOCKER_ACTIVE_WORKSPACE -eq "1") {
+    $sshState = "Enabled"
+  }
   return @(
     "💬 Launch Claude Code",
     "🤖 Launch Claude Code (Auto Mode)",
@@ -77,6 +82,7 @@ function Get-MainItems {
     "📁 Change Workspace Directory...",
     "🕒 Recent Projects...",
     "👤 Switch Active Profile (Current: $profile)",
+    "🔑 Project SSH Agent: [ $sshState ]",
     "──────────────────────────────────────────────────",
     "🛠️  Rebuild/Update Images...",
     "⚙️  Edit Environment Files...",
@@ -824,11 +830,19 @@ function Handle-Select {
         7 { $script:current_menu = "workspace"; $script:selected_index = 0 }
         8 { $script:current_menu = "recents"; $script:selected_index = 0 }
         9 { $script:current_menu = "profile"; $script:selected_index = 0 }
-        10 { } # Divider
-        11 { $script:current_menu = "build"; $script:selected_index = 0 }
-        12 { $script:current_menu = "config"; $script:selected_index = 0 }
-        13 { $script:current_menu = "cleanup"; $script:selected_index = 0 }
-        14 { return $true } # Exit
+        10 {
+            $curSsh = _ai_docker_get_project_ssh_agent -TargetPath $script:AI_DOCKER_ACTIVE_WORKSPACE
+            if ($curSsh -eq "1") {
+              _ai_docker_set_project_ssh_agent -TargetPath $script:AI_DOCKER_ACTIVE_WORKSPACE -Value "0"
+            } else {
+              _ai_docker_set_project_ssh_agent -TargetPath $script:AI_DOCKER_ACTIVE_WORKSPACE -Value "1"
+            }
+        }
+        11 { } # Divider
+        12 { $script:current_menu = "build"; $script:selected_index = 0 }
+        13 { $script:current_menu = "config"; $script:selected_index = 0 }
+        14 { $script:current_menu = "cleanup"; $script:selected_index = 0 }
+        15 { return $true } # Exit
       }
     }
     "profile" {
@@ -856,7 +870,7 @@ function Handle-Select {
           }
           Start-Sleep -Milliseconds 1500
           $script:current_menu = "main"
-          $script:selected_index = 5
+          $script:selected_index = 9
         }
         "DIVIDER" { }
         "BACK" { [void](Handle-Back) }
@@ -869,7 +883,7 @@ function Handle-Select {
               _ai_docker_set_project_profile -TargetPath $script:AI_DOCKER_ACTIVE_WORKSPACE -ProfileName $name
             }
             $script:current_menu = "main"
-            $script:selected_index = 5
+            $script:selected_index = 9
           } else {
             $script:selected_profile_name = $name
             $script:current_menu = "profile_actions"
@@ -889,7 +903,7 @@ function Handle-Select {
             _ai_docker_update_recents -PathToAdd $script:AI_DOCKER_ACTIVE_WORKSPACE
           }
           $script:current_menu = "main"
-          $script:selected_index = 5
+          $script:selected_index = 9
         }
         1 { # Rename Profile
           [Console]::Clear()
