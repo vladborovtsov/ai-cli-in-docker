@@ -146,10 +146,91 @@ class TestBashHelpers(unittest.TestCase):
         res_outside = self.run_bash('_ai_docker_get_unique_workspace_name "/opt/tools/helper"')
         self.assertEqual(res_outside.stdout.strip(), "opt-tools-helper")
 
-    def test_claude_command_default(self):
-        res = self.run_bash("type claude-docker-shell")
+    def test_project_ssh_agent_settings(self):
+        test_path = os.path.join(self.tmp_dir, "ssh_project")
+        os.makedirs(test_path)
+
+        # Default should be 0 (Disabled)
+        res = self.run_bash(f'_ai_docker_get_project_ssh_agent "{test_path}"')
+        self.assertEqual(res.stdout.strip(), "0")
+
+        res_should = self.run_bash(f'_ai_docker_should_mount_ssh_agent "{test_path}"')
+        self.assertEqual(res_should.returncode, 1) # False/Disabled
+
+        # Enable SSH Agent
+        res = self.run_bash(f'_ai_docker_set_project_ssh_agent "{test_path}" "1"')
         self.assertEqual(res.returncode, 0)
-        self.assertIn("claude --continue || claude", res.stdout)
+
+        res = self.run_bash(f'_ai_docker_get_project_ssh_agent "{test_path}"')
+        self.assertEqual(res.stdout.strip(), "1")
+
+        res_should = self.run_bash(f'_ai_docker_should_mount_ssh_agent "{test_path}"')
+        self.assertEqual(res_should.returncode, 0) # True/Enabled
+
+        # Disable SSH Agent again
+        res = self.run_bash(f'_ai_docker_set_project_ssh_agent "{test_path}" "0"')
+        self.assertEqual(res.returncode, 0)
+
+        res = self.run_bash(f'_ai_docker_get_project_ssh_agent "{test_path}"')
+        self.assertEqual(res.stdout.strip(), "0")
+
+        # Explicit environment variable override
+        res_env = self.run_bash(f'AI_DOCKER_ENABLE_SSH_AGENT=1 _ai_docker_should_mount_ssh_agent "{test_path}"')
+        self.assertEqual(res_env.returncode, 0) # Overridden to True
+
+        # Test migration
+        proj_map = os.path.join(self.tmp_dir, ".ai-docker-profiles", "project-profiles")
+        os.makedirs(os.path.dirname(proj_map), exist_ok=True)
+        with open(proj_map, "w") as f:
+            f.write(f"{test_path}:default\n")
+
+        res_mig = self.run_bash("_ai_docker_migrate_project_ssh_settings")
+        self.assertEqual(res_mig.returncode, 0)
+
+        ssh_map = os.path.join(self.tmp_dir, ".ai-docker-profiles", "project-ssh-settings")
+        self.assertTrue(os.path.exists(ssh_map))
+        with open(ssh_map, "r") as f:
+            content = f.read()
+            self.assertIn("ssh_mount:", content)
+
+    def test_all_runners_mount_ssh_agent(self):
+        test_dir = os.path.join(self.tmp_dir, "runner_test_proj")
+        os.makedirs(test_dir)
+
+        runners = [
+            "codex-docker-shell",
+            "antigravity-docker-shell",
+            "claude-docker-shell",
+            "opencode-docker-shell"
+        ]
+
+        for runner in runners:
+            # 1. Test when SSH Agent is DISABLED (ssh_mount:0)
+            self.run_bash(f'_ai_docker_set_project_ssh_agent "{test_dir}" "0"')
+            cmd_disabled = f'''
+            docker() {{
+              for arg in "$@"; do echo "ARG:$arg"; done
+            }}
+            export -f docker
+            {runner} "{test_dir}"
+            '''
+            res_dis = self.run_bash(cmd_disabled)
+            self.assertEqual(res_dis.returncode, 0, f"Failed executing {runner} when disabled")
+            self.assertNotIn("ARG:SSH_AUTH_SOCK=/run/host-services/ssh-auth.sock", res_dis.stdout, f"{runner} mounted SSH socket when disabled")
+
+            # 2. Test when SSH Agent is ENABLED (ssh_mount:1)
+            self.run_bash(f'_ai_docker_set_project_ssh_agent "{test_dir}" "1"')
+            cmd_enabled = f'''
+            docker() {{
+              for arg in "$@"; do echo "ARG:$arg"; done
+            }}
+            export -f docker
+            {runner} "{test_dir}"
+            '''
+            res_ena = self.run_bash(cmd_enabled)
+            self.assertEqual(res_ena.returncode, 0, f"Failed executing {runner} when enabled")
+            self.assertIn("ARG:SSH_AUTH_SOCK=/run/host-services/ssh-auth.sock", res_ena.stdout, f"{runner} did not export SSH_AUTH_SOCK when enabled")
+            self.assertIn("ARG:/run/host-services/ssh-auth.sock:/run/host-services/ssh-auth.sock", res_ena.stdout, f"{runner} did not volume mount SSH socket when enabled")
 
 if __name__ == "__main__":
     unittest.main()

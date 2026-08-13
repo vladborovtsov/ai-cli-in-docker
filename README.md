@@ -164,6 +164,14 @@ Each host config directory includes a `docker-env.env` file that is passed to th
   ```
 - **Active Profile File**: If `AI_DOCKER_PROFILE` is not set, the active profile defaults to the name stored in `~/.ai-docker-active-profile`, and falls back to `default` if the file doesn't exist.
 
+### Selective Project-Based SSH Agent Socket Forwarding
+Containers can selectively use your host's SSH agent on a per-project basis:
+- **TUI Toggle**: On the main `ai-docker` menu, select `🔑 Project SSH Agent: [ Enabled | Disabled ]` to toggle SSH agent socket forwarding for the currently active workspace.
+- **Security First**: **Disabled by default** (`ssh_mount:0`) for every project to maintain strong container isolation.
+- **How It Works**: When enabled (`ssh_mount:1`), the container bind-mounts the host's SSH agent socket (e.g. `/run/host-services/ssh-auth.sock` on macOS / Docker Desktop or `$SSH_AUTH_SOCK` on Linux) and exports `SSH_AUTH_SOCK`. Your private SSH key files stay safely in host memory/Keychain and are **never copied into the container**.
+- **Settings Storage**: Project settings are stored in `~/.ai-docker-profiles/project-ssh-settings` in tag format (e.g. `/path/to/project:ssh_mount:1`).
+- **Environment Override**: Set `export AI_DOCKER_ENABLE_SSH_AGENT=1` (or `0`) in your shell to explicitly override SSH agent forwarding across sessions.
+
 ### Passing environment variables
 Add environment variables to the tool's `docker-env.env` file.
 

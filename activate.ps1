@@ -141,6 +141,127 @@ function _ai_docker_get_project_profile {
   return $null
 }
 
+function _ai_docker_get_project_ssh_agent {
+  param([string]$TargetPath)
+  $mapFile = Join-Path (Join-Path $HOME ".ai-docker-profiles") "project-ssh-settings"
+  if (Test-Path -LiteralPath $mapFile -PathType Leaf) {
+    $resolvedTarget = _ai_docker_resolve_dir -Path $TargetPath
+    $lines = Get-Content -LiteralPath $mapFile -ErrorAction SilentlyContinue
+    if ($lines) {
+      foreach ($line in $lines) {
+        if ([string]::IsNullOrWhiteSpace($line) -or $line.StartsWith("#")) {
+          continue
+        }
+        if ($line.Contains(":ssh_mount:")) {
+          $idx = $line.IndexOf(":ssh_mount:")
+          $pPath = $line.Substring(0, $idx)
+          $pVal = $line.Substring($idx + 11)
+          if ($pPath -eq $resolvedTarget) {
+            return $pVal.Trim()
+          }
+        }
+      }
+    }
+  }
+  return "0"
+}
+
+function _ai_docker_set_project_ssh_agent {
+  param([string]$TargetPath, [string]$Value)
+  $mapFile = Join-Path (Join-Path $HOME ".ai-docker-profiles") "project-ssh-settings"
+  _ai_docker_ensure_dir -Path (Split-Path -Parent $mapFile)
+
+  $resolvedTarget = _ai_docker_resolve_dir -Path $TargetPath
+  $tmpFile = "$mapFile.tmp"
+  $found = $false
+  $newLines = [System.Collections.Generic.List[string]]::new()
+
+  if (Test-Path -LiteralPath $mapFile -PathType Leaf) {
+    $lines = Get-Content -LiteralPath $mapFile -ErrorAction SilentlyContinue
+    if ($lines) {
+      foreach ($line in $lines) {
+        if ([string]::IsNullOrWhiteSpace($line)) {
+          continue
+        }
+        $pPath = $line
+        if ($line.Contains(":ssh_mount:")) {
+          $pPath = $line.Substring(0, $line.IndexOf(":ssh_mount:"))
+        }
+        if ($pPath -eq $resolvedTarget) {
+          $newLines.Add("${resolvedTarget}:ssh_mount:${Value}")
+          $found = $true
+        } else {
+          $newLines.Add($line)
+        }
+      }
+    }
+  }
+
+  if (-not $found) {
+    $newLines.Add("${resolvedTarget}:ssh_mount:${Value}")
+  }
+
+  Set-Content -LiteralPath $tmpFile -Value $newLines -Encoding UTF8
+  Move-Item -LiteralPath $tmpFile -Destination $mapFile -Force
+}
+
+function _ai_docker_migrate_project_ssh_settings {
+  $mapFile = Join-Path (Join-Path $HOME ".ai-docker-profiles") "project-ssh-settings"
+  _ai_docker_ensure_dir -Path (Split-Path -Parent $mapFile)
+  if (-not (Test-Path -LiteralPath $mapFile -PathType Leaf)) {
+    New-Item -ItemType File -Path $mapFile -Force | Out-Null
+  }
+
+  $profilesMap = Join-Path (Join-Path $HOME ".ai-docker-profiles") "project-profiles"
+  if (Test-Path -LiteralPath $profilesMap -PathType Leaf) {
+    $lines = Get-Content -LiteralPath $profilesMap -ErrorAction SilentlyContinue
+    if ($lines) {
+      foreach ($line in $lines) {
+        if ([string]::IsNullOrWhiteSpace($line) -or $line.StartsWith("#")) {
+          continue
+        }
+        $lastColon = $line.LastIndexOf(':')
+        if ($lastColon -gt 0) {
+          $pPath = $line.Substring(0, $lastColon)
+          if ($pPath -and (Test-Path -LiteralPath $pPath)) {
+            $resolved = _ai_docker_resolve_dir -Path $pPath
+            $currentSettings = Get-Content -LiteralPath $mapFile -ErrorAction SilentlyContinue
+            $exists = $false
+            if ($currentSettings) {
+              foreach ($s in $currentSettings) {
+                if ($s.StartsWith("${resolved}:")) {
+                  $exists = $true
+                  break
+                }
+              }
+            }
+            if (-not $exists) {
+              Add-Content -LiteralPath $mapFile -Value "${resolved}:ssh_mount:0" -Encoding UTF8
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+function _ai_docker_get_ssh_auth_sock {
+  return "/run/host-services/ssh-auth.sock"
+}
+
+function _ai_docker_should_mount_ssh_agent {
+  param([string]$TargetPath)
+  $override = $env:AI_DOCKER_ENABLE_SSH_AGENT
+  if ($override -in @("1", "true", "TRUE", "yes", "YES")) {
+    return $true
+  }
+  if ($override -in @("0", "false", "FALSE", "no", "NO")) {
+    return $false
+  }
+  $projVal = _ai_docker_get_project_ssh_agent -TargetPath $TargetPath
+  return ($projVal -eq "1")
+}
+
 function _ai_docker_set_project_profile {
   param([string]$TargetPath, [string]$ProfileName)
   $mapFile = Join-Path (Join-Path $HOME ".ai-docker-profiles") "project-profiles"
@@ -548,6 +669,16 @@ function _ai_docker_run_container {
   foreach ($mount in $VolumeMounts) {
     $dockerArgs += '-v'
     $dockerArgs += $mount
+  }
+
+  if (_ai_docker_should_mount_ssh_agent -TargetPath $WorkspacePath) {
+    $sshSockPath = _ai_docker_get_ssh_auth_sock
+    if ($sshSockPath) {
+      $dockerArgs += '-v'
+      $dockerArgs += "${sshSockPath}:${sshSockPath}"
+      $dockerArgs += '-e'
+      $dockerArgs += "SSH_AUTH_SOCK=${sshSockPath}"
+    }
   }
 
   $dockerArgs += '-v'

@@ -134,6 +134,128 @@ _ai_docker_set_project_profile() {
   fi
 }
 
+_ai_docker_get_project_ssh_agent() {
+  local target_path="$1"
+  local map_file="$HOME/.ai-docker-profiles/project-ssh-settings"
+  if [ -f "$map_file" ]; then
+    local resolved_target
+    resolved_target=$(cd "$target_path" 2>/dev/null && pwd || echo "$target_path")
+    while IFS= read -r line || [ -n "$line" ]; do
+      [[ "$line" =~ ^# ]] && continue
+      [ -z "$line" ] && continue
+      local p_path="${line%:ssh_mount:*}"
+      if [ "$p_path" = "$resolved_target" ]; then
+        local p_val="${line##*:ssh_mount:}"
+        if [ "$p_val" = "1" ]; then
+          echo "1"
+          return 0
+        else
+          echo "0"
+          return 0
+        fi
+      fi
+      local alt_path="${line%:*}"
+      if [ "$alt_path" = "$resolved_target" ]; then
+        local alt_val="${line##*:}"
+        if [ "$alt_val" = "1" ] || [ "$alt_val" = "ssh_mount:1" ]; then
+          echo "1"
+          return 0
+        fi
+      fi
+    done < "$map_file"
+  fi
+  echo "0"
+  return 0
+}
+
+_ai_docker_set_project_ssh_agent() {
+  local target_path="$1"
+  local value="$2"
+  local map_file="$HOME/.ai-docker-profiles/project-ssh-settings"
+  mkdir -p "$(dirname "$map_file")"
+
+  local resolved_target
+  resolved_target=$(cd "$target_path" 2>/dev/null && pwd || echo "$target_path")
+
+  local tmp_file="${map_file}.tmp"
+  local found=0
+  rm -f "$tmp_file"
+
+  if [ -f "$map_file" ]; then
+    while IFS= read -r line || [ -n "$line" ]; do
+      if [ -n "$line" ]; then
+        local p_path="${line%:ssh_mount:*}"
+        local alt_path="${line%:*}"
+        if [ "$p_path" = "$resolved_target" ] || [ "$alt_path" = "$resolved_target" ]; then
+          echo "${resolved_target}:ssh_mount:${value}" >> "$tmp_file"
+          found=1
+        else
+          echo "$line" >> "$tmp_file"
+        fi
+      fi
+    done < "$map_file"
+  fi
+
+  if [ "$found" -eq 0 ]; then
+    echo "${resolved_target}:ssh_mount:${value}" >> "$tmp_file"
+  fi
+
+  if [ -f "$tmp_file" ]; then
+    mv "$tmp_file" "$map_file"
+  fi
+}
+
+_ai_docker_migrate_project_ssh_settings() {
+  local settings_file="$HOME/.ai-docker-profiles/project-ssh-settings"
+  mkdir -p "$(dirname "$settings_file")"
+  touch "$settings_file"
+
+  local profiles_map="$HOME/.ai-docker-profiles/project-profiles"
+  if [ -f "$profiles_map" ]; then
+    while IFS= read -r line || [ -n "$line" ]; do
+      [[ "$line" =~ ^# ]] && continue
+      [ -z "$line" ] && continue
+      local p_path="${line%:*}"
+      if [ -n "$p_path" ]; then
+        local resolved
+        resolved=$(cd "$p_path" 2>/dev/null && pwd || echo "$p_path")
+        if ! grep -q "^${resolved}:" "$settings_file" 2>/dev/null; then
+          echo "${resolved}:ssh_mount:0" >> "$settings_file"
+        fi
+      fi
+    done < "$profiles_map"
+  fi
+}
+
+_ai_docker_get_ssh_auth_sock() {
+  if [ "$(uname -s 2>/dev/null)" = "Darwin" ]; then
+    echo "/run/host-services/ssh-auth.sock"
+    return 0
+  elif [ -S "/run/host-services/ssh-auth.sock" ]; then
+    echo "/run/host-services/ssh-auth.sock"
+    return 0
+  elif [ -n "${SSH_AUTH_SOCK-}" ] && [ -S "${SSH_AUTH_SOCK}" ]; then
+    echo "${SSH_AUTH_SOCK}"
+    return 0
+  fi
+  echo "/run/host-services/ssh-auth.sock"
+}
+
+_ai_docker_should_mount_ssh_agent() {
+  local target_path="${1-$(pwd)}"
+  case "${AI_DOCKER_ENABLE_SSH_AGENT:-auto}" in
+    1|true|TRUE|yes|YES) return 0 ;;
+    0|false|FALSE|no|NO) return 1 ;;
+  esac
+
+  local project_val
+  project_val=$(_ai_docker_get_project_ssh_agent "$target_path")
+  if [ "$project_val" = "1" ]; then
+    return 0
+  fi
+  return 1
+}
+
 _ai_docker_load_profile() {
   local target_profile="${1-}"
   local directory="${2-}"
@@ -527,6 +649,13 @@ codex-docker-shell() {
   if _ai_docker_should_mount_localtime; then
     docker_args+=(-v "/etc/localtime:/etc/localtime:ro")
   fi
+  if _ai_docker_should_mount_ssh_agent "$cwd"; then
+    local ssh_sock_path
+    ssh_sock_path="$(_ai_docker_get_ssh_auth_sock)"
+    if [ -n "$ssh_sock_path" ]; then
+      docker_args+=(-v "${ssh_sock_path}:${ssh_sock_path}" -e "SSH_AUTH_SOCK=${ssh_sock_path}")
+    fi
+  fi
   docker_args+=(
     -v "$CODEX_CONFIG_PATH:/root/.codex"
     -v "${cwd}:/workspace/${workspace_name}"
@@ -584,6 +713,13 @@ codex-auth-docker-run() {
   fi
   if _ai_docker_should_mount_localtime; then
     docker_args+=(-v "/etc/localtime:/etc/localtime:ro")
+  fi
+  if _ai_docker_should_mount_ssh_agent "$cwd"; then
+    local ssh_sock_path
+    ssh_sock_path="$(_ai_docker_get_ssh_auth_sock)"
+    if [ -n "$ssh_sock_path" ]; then
+      docker_args+=(-v "${ssh_sock_path}:${ssh_sock_path}" -e "SSH_AUTH_SOCK=${ssh_sock_path}")
+    fi
   fi
   docker_args+=(
     -v "$CODEX_CONFIG_PATH:/root/.codex"
@@ -683,6 +819,13 @@ antigravity-docker-shell() {
   )
   if _ai_docker_should_mount_localtime; then
     docker_args+=(-v "/etc/localtime:/etc/localtime:ro")
+  fi
+  if _ai_docker_should_mount_ssh_agent "$cwd"; then
+    local ssh_sock_path
+    ssh_sock_path="$(_ai_docker_get_ssh_auth_sock)"
+    if [ -n "$ssh_sock_path" ]; then
+      docker_args+=(-v "${ssh_sock_path}:${ssh_sock_path}" -e "SSH_AUTH_SOCK=${ssh_sock_path}")
+    fi
   fi
   docker_args+=(
     -v "$ANTIGRAVITY_CONFIG_PATH:/root/.gemini"
@@ -787,6 +930,13 @@ claude-docker-shell() {
   )
   if _ai_docker_should_mount_localtime; then
     docker_args+=(-v "/etc/localtime:/etc/localtime:ro")
+  fi
+  if _ai_docker_should_mount_ssh_agent "$cwd"; then
+    local ssh_sock_path
+    ssh_sock_path="$(_ai_docker_get_ssh_auth_sock)"
+    if [ -n "$ssh_sock_path" ]; then
+      docker_args+=(-v "${ssh_sock_path}:${ssh_sock_path}" -e "SSH_AUTH_SOCK=${ssh_sock_path}")
+    fi
   fi
   docker_args+=(
     -v "$CLAUDE_CONFIG_PATH:/root/.claude"
@@ -899,6 +1049,13 @@ opencode-docker-shell() {
   if _ai_docker_should_mount_localtime; then
     docker_args+=(-v "/etc/localtime:/etc/localtime:ro")
   fi
+  if _ai_docker_should_mount_ssh_agent "$cwd"; then
+    local ssh_sock_path
+    ssh_sock_path="$(_ai_docker_get_ssh_auth_sock)"
+    if [ -n "$ssh_sock_path" ]; then
+      docker_args+=(-v "${ssh_sock_path}:${ssh_sock_path}" -e "SSH_AUTH_SOCK=${ssh_sock_path}")
+    fi
+  fi
   docker_args+=(
     -v "$OPENCODE_DOCKER_DIR/local:/root/.local"
     -v "$OPENCODE_DOCKER_DIR/config:/root/.config/opencode"
@@ -932,5 +1089,5 @@ ai-docker() {
 }
 
 ai-docker-deactivate() {
-  unset -f _ai_docker_migrate_legacy _ai_docker_get_project_profile _ai_docker_set_project_profile _ai_docker_load_profile ai-docker-profile _ai_docker_update_recents _ai_docker_is_linux_host _ai_docker_should_mount_localtime _ai_docker_detect_tz _ai_docker_should_use_host_network _ai_docker_sync_gitconfig _ai_docker_gitconfig_link_cmd codex-docker-build codex-docker-shell codex-auth-docker-run antigravity-docker-build antigravity-docker-shell claude-docker-build claude-docker-shell opencode-docker-build opencode-docker-shell docker-ai-build-all ai-docker ai-docker-deactivate _ai_docker_get_unique_workspace_name
+  unset -f _ai_docker_migrate_legacy _ai_docker_get_project_profile _ai_docker_set_project_profile _ai_docker_get_project_ssh_agent _ai_docker_set_project_ssh_agent _ai_docker_migrate_project_ssh_settings _ai_docker_get_ssh_auth_sock _ai_docker_should_mount_ssh_agent _ai_docker_load_profile ai-docker-profile _ai_docker_update_recents _ai_docker_is_linux_host _ai_docker_should_mount_localtime _ai_docker_detect_tz _ai_docker_should_use_host_network _ai_docker_sync_gitconfig _ai_docker_gitconfig_link_cmd codex-docker-build codex-docker-shell codex-auth-docker-run antigravity-docker-build antigravity-docker-shell claude-docker-build claude-docker-shell opencode-docker-build opencode-docker-shell docker-ai-build-all ai-docker ai-docker-deactivate _ai_docker_get_unique_workspace_name
 }

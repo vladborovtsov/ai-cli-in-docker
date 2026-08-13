@@ -12,6 +12,7 @@ if [ -f "$SCRIPT_DIR/activate.sh" ]; then
   set +e
   source "$SCRIPT_DIR/activate.sh"
   set -e
+  _ai_docker_migrate_project_ssh_settings
 else
   echo "Error: activate.sh not found in $SCRIPT_DIR" >&2
   exit 1
@@ -310,6 +311,11 @@ load_recents_menu() {
 
 # Menu definition lists
 load_main_menu() {
+  local ssh_state="Disabled"
+  if [ "$(_ai_docker_get_project_ssh_agent "$active_mount_path")" = "1" ]; then
+    ssh_state="Enabled"
+  fi
+
   main_items=(
     "💬 Launch Claude Code"
     "🤖 Launch Claude Code (Auto Mode)"
@@ -321,6 +327,7 @@ load_main_menu() {
     "📁 Change Workspace Directory..."
     "🕒 Recent Projects..."
     "👤 Switch Active Profile (Current: ${AI_DOCKER_PROFILE:-default})"
+    "🔑 Project SSH Agent: [ ${ssh_state} ]"
     "──────────────────────────────────────────────────"
     "🛠️  Rebuild/Update Images..."
     "⚙️  Edit Environment Files..."
@@ -855,11 +862,22 @@ handle_select() {
         7) current_menu="workspace"; selected_index=0; force_clear=1 ;;
         8) current_menu="recents"; selected_index=0; force_clear=1 ;;
         9) current_menu="profile"; selected_index=0; force_clear=1 ;;
-        10) ;; # divider
-        11) current_menu="build"; selected_index=0; force_clear=1 ;;
-        12) current_menu="config"; selected_index=0; force_clear=1 ;;
-        13) current_menu="cleanup"; selected_index=0; force_clear=1 ;;
-        14) exit 0 ;;
+        10)
+          local cur_ssh
+          cur_ssh=$(_ai_docker_get_project_ssh_agent "$active_mount_path")
+          if [ "$cur_ssh" = "1" ]; then
+            _ai_docker_set_project_ssh_agent "$active_mount_path" 0
+          else
+            _ai_docker_set_project_ssh_agent "$active_mount_path" 1
+          fi
+          load_main_menu
+          force_clear=1
+          ;;
+        11) ;; # divider
+        12) current_menu="build"; selected_index=0; force_clear=1 ;;
+        13) current_menu="config"; selected_index=0; force_clear=1 ;;
+        14) current_menu="cleanup"; selected_index=0; force_clear=1 ;;
+        15) exit 0 ;;
       esac
       ;;
     profile)
@@ -926,7 +944,7 @@ handle_select() {
             _ai_docker_update_recents "$active_mount_path"
           fi
           current_menu="main"
-          selected_index=5
+          selected_index=9
           force_clear=1
           ;;
         1) # Rename
