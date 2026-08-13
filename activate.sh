@@ -665,7 +665,7 @@ codex-docker-shell() {
     -e "TMUX_SESSION=${workspace_name}"
     -e "AI_DOCKER_PROFILE=${AI_DOCKER_PROFILE}"
     -e AI_NAME=codex
-    -e AI_COMMAND=codex
+    -e AI_COMMAND="${AI_COMMAND:-codex resume --last}"
     "$CODEX_IMAGE_NAME"
     -lc "$(_ai_docker_gitconfig_link_cmd /root/.codex start-tmux-layout)"
   )

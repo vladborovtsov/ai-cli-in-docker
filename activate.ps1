@@ -852,7 +852,7 @@ function codex-docker-shell {
     TMUX_SESSION = $workspaceLeaf
     AI_DOCKER_PROFILE = $script:AI_DOCKER_PROFILE
     AI_NAME = 'codex'
-    AI_COMMAND = 'codex'
+    AI_COMMAND = $(if ($env:AI_COMMAND) { $env:AI_COMMAND } else { 'codex resume --last' })
   }
 
   $runParams = @{

@@ -232,5 +232,19 @@ class TestBashHelpers(unittest.TestCase):
             self.assertIn("ARG:SSH_AUTH_SOCK=/run/host-services/ssh-auth.sock", res_ena.stdout, f"{runner} did not export SSH_AUTH_SOCK when enabled")
             self.assertIn("ARG:/run/host-services/ssh-auth.sock:/run/host-services/ssh-auth.sock", res_ena.stdout, f"{runner} did not volume mount SSH socket when enabled")
 
+    def test_codex_default_ai_command(self):
+        test_dir = os.path.join(self.tmp_dir, "codex_cmd_proj")
+        os.makedirs(test_dir)
+        cmd = f'''
+        docker() {{
+          for arg in "$@"; do echo "ARG:$arg"; done
+        }}
+        export -f docker
+        codex-docker-shell "{test_dir}"
+        '''
+        res = self.run_bash(cmd)
+        self.assertEqual(res.returncode, 0)
+        self.assertIn("ARG:AI_COMMAND=codex resume --last", res.stdout)
+
 if __name__ == "__main__":
     unittest.main()

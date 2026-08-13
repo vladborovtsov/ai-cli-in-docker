@@ -65,7 +65,7 @@ TMUX_WINDOW_STATUS_CURRENT_FORMAT="${TMUX_WINDOW_STATUS_CURRENT_FORMAT:-#I: #W#{
 if ! tmux has-session -t "${TMUX_SESSION}" 2>/dev/null; then
   # First tab: main AI CLI (kept alive with exec bash -l)
   AI_NAME="${AI_NAME:-codex}"
-  AI_COMMAND="${AI_COMMAND:-codex}"
+  AI_COMMAND="${AI_COMMAND:-codex resume --last}"
   tmux new-session -d -s "${TMUX_SESSION}" -n "${AI_NAME}" \
     "/bin/bash" -lc "${AI_COMMAND} || true; exec bash -l" || {
       echo "[start-tmux-layout] Failed to create tmux session: ${TMUX_SESSION}" >&2

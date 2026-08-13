@@ -4,7 +4,7 @@ Run AI CLI tools (OpenAI Codex, Google Antigravity, Claude, OpenCode) inside Doc
 
 ### Contents
 - [Why AI CLI in Docker?](WHY.md): Rationale behind this project.
-- `Dockerfile.codex`: Based on `ghcr.io/openai/codex-universal` with `@openai/codex` preinstalled.
+- `Dockerfile.codex`: Based on `ghcr.io/openai/codex-universal` with `@openai/codex` preinstalled. Automatically resumes the last session (`codex resume --last`), falling back to a new session if none exists.
 - `Dockerfile.antigravity`: Based on `ubuntu:24.04` with the Google Antigravity CLI preinstalled.
 - `Dockerfile.claude`: Based on `ubuntu:24.04` with `@anthropic-ai/claude-code` preinstalled. Supports launching in three variants with automatic fallback to starting a new session if no prior conversation exists: Standard Mode (💬 with `claude --continue || claude`), Auto Mode (🤖 with `claude --permission-mode auto --continue || claude --permission-mode auto`), and Dangerous Mode (💀 with `claude --dangerously-skip-permissions --continue || claude --dangerously-skip-permissions` using a targeted `LD_PRELOAD` root privilege bypass).
 - `Dockerfile.opencode`: Based on `ubuntu:24.04` with `opencode-ai` preinstalled.
@@ -75,7 +75,7 @@ ai-docker
 ### What you get when the container starts
 - A tmux session named after your current folder (overridable with `TMUX_SESSION`).
 - Windows:
-  1) AI CLI (active by default): runs `codex`, `agy` (Antigravity), `claude`, or `opencode`, then keeps shell open.
+  1) AI CLI (active by default): runs `codex` (resumes last session via `codex resume --last`), `agy` (Antigravity), `claude`, or `opencode`, then keeps shell open.
   2) Shell
   3) Shell
   4) `htop`
