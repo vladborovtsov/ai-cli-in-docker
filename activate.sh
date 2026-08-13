@@ -420,6 +420,26 @@ _ai_docker_should_use_host_network() {
   _ai_docker_is_linux_host
 }
 
+_ai_docker_sync_gitconfig() {
+  local target_dir="$1"
+  if [ -z "$target_dir" ]; then
+    return 0
+  fi
+  mkdir -p "$target_dir"
+  if [ -f "$HOME/.gitconfig" ]; then
+    cp -L "$HOME/.gitconfig" "$target_dir/.gitconfig" 2>/dev/null || true
+  fi
+  if [ -f "$HOME/.config/git/config" ]; then
+    cp -L "$HOME/.config/git/config" "$target_dir/.gitconfig_xdg" 2>/dev/null || true
+  fi
+}
+
+_ai_docker_gitconfig_link_cmd() {
+  local container_config_dir="$1"
+  local orig_cmd="${2:-start-tmux-layout}"
+  echo "if [ -f \"${container_config_dir}/.gitconfig\" ]; then ln -sf \"${container_config_dir}/.gitconfig\" /root/.gitconfig; fi; if [ -f \"${container_config_dir}/.gitconfig_xdg\" ]; then mkdir -p /root/.config/git && ln -sf \"${container_config_dir}/.gitconfig_xdg\" /root/.config/git/config; fi; ${orig_cmd}"
+}
+
 codex-docker-build() {
   # Accept optional flag: --no-cache
   local no_cache_flag=""
@@ -467,6 +487,7 @@ codex-docker-shell() {
 
   _ai_docker_load_profile "" "$cwd"
   _ai_docker_update_recents "$cwd"
+  _ai_docker_sync_gitconfig "$CODEX_CONFIG_PATH"
 
   if [ "$cwd" = "$HOME" ]; then
     echo "⚠️ Warning: You are running codex-docker-shell from your HOME directory." >&2
@@ -506,12 +527,6 @@ codex-docker-shell() {
   if _ai_docker_should_mount_localtime; then
     docker_args+=(-v "/etc/localtime:/etc/localtime:ro")
   fi
-  if [ -f "$HOME/.gitconfig" ]; then
-    docker_args+=(-v "$HOME/.gitconfig:/root/.gitconfig:ro")
-  fi
-  if [ -f "$HOME/.config/git/config" ]; then
-    docker_args+=(-v "$HOME/.config/git/config:/root/.config/git/config:ro")
-  fi
   docker_args+=(
     -v "$CODEX_CONFIG_PATH:/root/.codex"
     -v "${cwd}:/workspace/${workspace_name}"
@@ -523,7 +538,7 @@ codex-docker-shell() {
     -e AI_NAME=codex
     -e AI_COMMAND=codex
     "$CODEX_IMAGE_NAME"
-    -lc "start-tmux-layout"
+    -lc "$(_ai_docker_gitconfig_link_cmd /root/.codex start-tmux-layout)"
   )
 
   docker run "${docker_args[@]}"
@@ -629,6 +644,7 @@ antigravity-docker-shell() {
 
   _ai_docker_load_profile "" "$cwd"
   _ai_docker_update_recents "$cwd"
+  _ai_docker_sync_gitconfig "$ANTIGRAVITY_CONFIG_PATH"
 
   if [ "$cwd" = "$HOME" ]; then
     echo "⚠️ Warning: You are running antigravity-docker-shell from your HOME directory." >&2
@@ -668,12 +684,6 @@ antigravity-docker-shell() {
   if _ai_docker_should_mount_localtime; then
     docker_args+=(-v "/etc/localtime:/etc/localtime:ro")
   fi
-  if [ -f "$HOME/.gitconfig" ]; then
-    docker_args+=(-v "$HOME/.gitconfig:/root/.gitconfig:ro")
-  fi
-  if [ -f "$HOME/.config/git/config" ]; then
-    docker_args+=(-v "$HOME/.config/git/config:/root/.config/git/config:ro")
-  fi
   docker_args+=(
     -v "$ANTIGRAVITY_CONFIG_PATH:/root/.gemini"
     -v "${cwd}:/workspace/${workspace_name}"
@@ -685,7 +695,7 @@ antigravity-docker-shell() {
     -e AI_NAME=antigravity
     -e AI_COMMAND=agy
     "$ANTIGRAVITY_IMAGE_NAME"
-    -lc "start-tmux-layout"
+    -lc "$(_ai_docker_gitconfig_link_cmd /root/.gemini start-tmux-layout)"
   )
 
   docker run "${docker_args[@]}"
@@ -738,6 +748,7 @@ claude-docker-shell() {
 
   _ai_docker_load_profile "" "$cwd"
   _ai_docker_update_recents "$cwd"
+  _ai_docker_sync_gitconfig "$CLAUDE_CONFIG_PATH"
 
   if [ "$cwd" = "$HOME" ]; then
     echo "⚠️ Warning: You are running claude-docker-shell from your HOME directory." >&2
@@ -777,12 +788,6 @@ claude-docker-shell() {
   if _ai_docker_should_mount_localtime; then
     docker_args+=(-v "/etc/localtime:/etc/localtime:ro")
   fi
-  if [ -f "$HOME/.gitconfig" ]; then
-    docker_args+=(-v "$HOME/.gitconfig:/root/.gitconfig:ro")
-  fi
-  if [ -f "$HOME/.config/git/config" ]; then
-    docker_args+=(-v "$HOME/.config/git/config:/root/.config/git/config:ro")
-  fi
   docker_args+=(
     -v "$CLAUDE_CONFIG_PATH:/root/.claude"
     -v "${cwd}:/workspace/${workspace_name}"
@@ -794,7 +799,7 @@ claude-docker-shell() {
     -e AI_NAME=claude
     -e AI_COMMAND="${AI_COMMAND:-claude --continue || claude}"
     "$CLAUDE_IMAGE_NAME"
-    -lc "ln -sf /root/.claude/claude.json /root/.claude.json; start-tmux-layout"
+    -lc "$(_ai_docker_gitconfig_link_cmd /root/.claude 'ln -sf /root/.claude/claude.json /root/.claude.json; start-tmux-layout')"
   )
 
   docker run "${docker_args[@]}"
@@ -854,6 +859,7 @@ opencode-docker-shell() {
 
   _ai_docker_load_profile "" "$cwd"
   _ai_docker_update_recents "$cwd"
+  _ai_docker_sync_gitconfig "$OPENCODE_DOCKER_DIR/config"
 
   if [ "$cwd" = "$HOME" ]; then
     echo "⚠️ Warning: You are running opencode-docker-shell from your HOME directory." >&2
@@ -893,12 +899,6 @@ opencode-docker-shell() {
   if _ai_docker_should_mount_localtime; then
     docker_args+=(-v "/etc/localtime:/etc/localtime:ro")
   fi
-  if [ -f "$HOME/.gitconfig" ]; then
-    docker_args+=(-v "$HOME/.gitconfig:/root/.gitconfig:ro")
-  fi
-  if [ -f "$HOME/.config/git/config" ]; then
-    docker_args+=(-v "$HOME/.config/git/config:/root/.config/git/config:ro")
-  fi
   docker_args+=(
     -v "$OPENCODE_DOCKER_DIR/local:/root/.local"
     -v "$OPENCODE_DOCKER_DIR/config:/root/.config/opencode"
@@ -912,7 +912,7 @@ opencode-docker-shell() {
     -e AI_COMMAND=opencode
     -e PATH=/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin
     "$OPENCODE_IMAGE_NAME"
-    -lc "start-tmux-layout"
+    -lc "$(_ai_docker_gitconfig_link_cmd /root/.config/opencode start-tmux-layout)"
   )
 
   docker run "${docker_args[@]}"
@@ -932,5 +932,5 @@ ai-docker() {
 }
 
 ai-docker-deactivate() {
-  unset -f _ai_docker_migrate_legacy _ai_docker_get_project_profile _ai_docker_set_project_profile _ai_docker_load_profile ai-docker-profile _ai_docker_update_recents _ai_docker_is_linux_host _ai_docker_should_mount_localtime _ai_docker_detect_tz _ai_docker_should_use_host_network codex-docker-build codex-docker-shell codex-auth-docker-run antigravity-docker-build antigravity-docker-shell claude-docker-build claude-docker-shell opencode-docker-build opencode-docker-shell docker-ai-build-all ai-docker ai-docker-deactivate _ai_docker_get_unique_workspace_name
+  unset -f _ai_docker_migrate_legacy _ai_docker_get_project_profile _ai_docker_set_project_profile _ai_docker_load_profile ai-docker-profile _ai_docker_update_recents _ai_docker_is_linux_host _ai_docker_should_mount_localtime _ai_docker_detect_tz _ai_docker_should_use_host_network _ai_docker_sync_gitconfig _ai_docker_gitconfig_link_cmd codex-docker-build codex-docker-shell codex-auth-docker-run antigravity-docker-build antigravity-docker-shell claude-docker-build claude-docker-shell opencode-docker-build opencode-docker-shell docker-ai-build-all ai-docker ai-docker-deactivate _ai_docker_get_unique_workspace_name
 }

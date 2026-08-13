@@ -493,6 +493,30 @@ function _ai_docker_set_title {
   }
 }
 
+function _ai_docker_sync_gitconfig {
+  param([string]$TargetDir)
+  if ([string]::IsNullOrWhiteSpace($TargetDir)) { return }
+  if (-not (Test-Path -LiteralPath $TargetDir -PathType Container)) {
+    New-Item -ItemType Directory -Path $TargetDir -Force | Out-Null
+  }
+  $gitConfig = Join-Path $HOME ".gitconfig"
+  if (Test-Path -LiteralPath $gitConfig -PathType Leaf) {
+    Copy-Item -LiteralPath $gitConfig -Destination (Join-Path $TargetDir ".gitconfig") -Force -ErrorAction SilentlyContinue
+  }
+  $xdgGit = Join-Path (Join-Path $HOME ".config") "git/config"
+  if (Test-Path -LiteralPath $xdgGit -PathType Leaf) {
+    Copy-Item -LiteralPath $xdgGit -Destination (Join-Path $TargetDir ".gitconfig_xdg") -Force -ErrorAction SilentlyContinue
+  }
+}
+
+function _ai_docker_gitconfig_link_cmd {
+  param(
+    [string]$ContainerConfigDir,
+    [string]$OrigCmd = 'start-tmux-layout'
+  )
+  return "if [ -f `"${ContainerConfigDir}/.gitconfig`" ]; then ln -sf `"${ContainerConfigDir}/.gitconfig`" /root/.gitconfig; fi; if [ -f `"${ContainerConfigDir}/.gitconfig_xdg`" ]; then mkdir -p /root/.config/git && ln -sf `"${ContainerConfigDir}/.gitconfig_xdg`" /root/.config/git/config; fi; ${OrigCmd}"
+}
+
 function _ai_docker_run_container {
   param(
     [Parameter(Mandatory = $true)][string]$ImageName,
@@ -524,17 +548,6 @@ function _ai_docker_run_container {
   foreach ($mount in $VolumeMounts) {
     $dockerArgs += '-v'
     $dockerArgs += $mount
-  }
-
-  $gitConfig = Join-Path $HOME ".gitconfig"
-  if (Test-Path -LiteralPath $gitConfig -PathType Leaf) {
-    $dockerArgs += '-v'
-    $dockerArgs += "$(_ai_docker_resolve_dir -Path $gitConfig):/root/.gitconfig:ro"
-  }
-  $xdgGit = Join-Path (Join-Path $HOME ".config") "git/config"
-  if (Test-Path -LiteralPath $xdgGit -PathType Leaf) {
-    $dockerArgs += '-v'
-    $dockerArgs += "$(_ai_docker_resolve_dir -Path $xdgGit):/root/.config/git/config:ro"
   }
 
   $dockerArgs += '-v'
@@ -701,6 +714,7 @@ function codex-docker-shell {
   }
 
   _ai_docker_set_title -ToolName 'codex' -WorkspacePath $cwd
+  _ai_docker_sync_gitconfig -TargetDir $script:CODEX_CONFIG_PATH
   $workspaceLeaf = _ai_docker_get_unique_workspace_name -Path $cwd
   $envVars = @{
     TERM = $(if ($env:TERM) { $env:TERM } else { 'xterm-256color' })
@@ -716,7 +730,7 @@ function codex-docker-shell {
     VolumeMounts = @("${script:CODEX_CONFIG_PATH}:/root/.codex")
     WorkspacePath = $cwd
     EnvironmentVariables = $envVars
-    CommandArgs = @('-lc', 'start-tmux-layout')
+    CommandArgs = @('-lc', (_ai_docker_gitconfig_link_cmd -ContainerConfigDir '/root/.codex' -OrigCmd 'start-tmux-layout'))
   }
   return _ai_docker_run_container @runParams
 }
@@ -774,6 +788,7 @@ function antigravity-docker-shell {
   }
 
   _ai_docker_set_title -ToolName 'antigravity' -WorkspacePath $cwd
+  _ai_docker_sync_gitconfig -TargetDir $script:ANTIGRAVITY_CONFIG_PATH
   $workspaceLeaf = _ai_docker_get_unique_workspace_name -Path $cwd
   $envVars = @{
     TERM = $(if ($env:TERM) { $env:TERM } else { 'xterm-256color' })
@@ -789,7 +804,7 @@ function antigravity-docker-shell {
     VolumeMounts = @("${script:ANTIGRAVITY_CONFIG_PATH}:/root/.gemini")
     WorkspacePath = $cwd
     EnvironmentVariables = $envVars
-    CommandArgs = @('-lc', 'start-tmux-layout')
+    CommandArgs = @('-lc', (_ai_docker_gitconfig_link_cmd -ContainerConfigDir '/root/.gemini' -OrigCmd 'start-tmux-layout'))
   }
   return _ai_docker_run_container @runParams
 }
@@ -812,6 +827,7 @@ function claude-docker-shell {
   }
 
   _ai_docker_set_title -ToolName 'claude' -WorkspacePath $cwd
+  _ai_docker_sync_gitconfig -TargetDir $script:CLAUDE_CONFIG_PATH
   $workspaceLeaf = _ai_docker_get_unique_workspace_name -Path $cwd
   $envVars = @{
     TERM = $(if ($env:TERM) { $env:TERM } else { 'xterm-256color' })
@@ -827,7 +843,7 @@ function claude-docker-shell {
     VolumeMounts = @("${script:CLAUDE_CONFIG_PATH}:/root/.claude")
     WorkspacePath = $cwd
     EnvironmentVariables = $envVars
-    CommandArgs = @('-lc', 'ln -sf /root/.claude/claude.json /root/.claude.json; start-tmux-layout')
+    CommandArgs = @('-lc', (_ai_docker_gitconfig_link_cmd -ContainerConfigDir '/root/.claude' -OrigCmd 'ln -sf /root/.claude/claude.json /root/.claude.json; start-tmux-layout'))
   }
   return _ai_docker_run_container @runParams
 }
@@ -850,6 +866,7 @@ function opencode-docker-shell {
   }
 
   _ai_docker_set_title -ToolName 'opencode' -WorkspacePath $cwd
+  _ai_docker_sync_gitconfig -TargetDir (Join-Path $script:OPENCODE_DOCKER_DIR 'config')
   $workspaceLeaf = _ai_docker_get_unique_workspace_name -Path $cwd
   $envVars = @{
     TERM = $(if ($env:TERM) { $env:TERM } else { 'xterm-256color' })
@@ -869,7 +886,7 @@ function opencode-docker-shell {
     )
     WorkspacePath = $cwd
     EnvironmentVariables = $envVars
-    CommandArgs = @('-lc', 'start-tmux-layout')
+    CommandArgs = @('-lc', (_ai_docker_gitconfig_link_cmd -ContainerConfigDir '/root/.config/opencode' -OrigCmd 'start-tmux-layout'))
   }
   return _ai_docker_run_container @runParams
 }
@@ -921,6 +938,7 @@ function ai-docker-deactivate {
     '_ai_docker_get_unique_workspace_name',
     '_ai_docker_confirm_home_mount', '_ai_docker_get_tz', '_ai_docker_should_use_host_network',
     '_ai_docker_set_title', '_ai_docker_run_container', '_ai_docker_build_image',
+    '_ai_docker_sync_gitconfig', '_ai_docker_gitconfig_link_cmd',
     '_ai_docker_resolve_no_cache', '_ai_docker_load_profile',
     '_ai_docker_migrate_legacy', '_ai_docker_migrate_dir', '_ai_docker_get_project_profile', '_ai_docker_set_project_profile', 'ai-docker-profile',
     'codex-docker-build', 'codex-docker-shell', 'codex-auth-docker-run',
