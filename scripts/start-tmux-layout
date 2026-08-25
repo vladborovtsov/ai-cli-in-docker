@@ -66,8 +66,9 @@ if ! tmux has-session -t "${TMUX_SESSION}" 2>/dev/null; then
   # First tab: main AI CLI (kept alive with exec bash -l)
   AI_NAME="${AI_NAME:-codex}"
   AI_COMMAND="${AI_COMMAND:-codex resume --last}"
+  AUTOEXEC_CMD='if [ -f .ai-docker/autoexec.sh ]; then echo "[ai-docker] Running .ai-docker/autoexec.sh..."; chmod +x .ai-docker/autoexec.sh 2>/dev/null || true; sed -i "s/\r$//" .ai-docker/autoexec.sh 2>/dev/null || true; /bin/bash .ai-docker/autoexec.sh || true; fi;'
   tmux new-session -d -s "${TMUX_SESSION}" -n "${AI_NAME}" \
-    "/bin/bash" -lc "${AI_COMMAND} || true; exec bash -l" || {
+    "/bin/bash" -lc "${AUTOEXEC_CMD} ${AI_COMMAND} || true; exec bash -l" || {
       echo "[start-tmux-layout] Failed to create tmux session: ${TMUX_SESSION}" >&2
       exec /bin/bash -l
     }

@@ -246,5 +246,60 @@ class TestBashHelpers(unittest.TestCase):
         self.assertEqual(res.returncode, 0)
         self.assertIn("ARG:AI_COMMAND=codex resume --last", res.stdout)
 
+    def test_start_tmux_layout_syntax_and_autoexec(self):
+        layout_script = os.path.join(self.repo_dir, "scripts", "start-tmux-layout")
+        # 1. Syntax check
+        syntax_res = subprocess.run(["bash", "-n", layout_script], capture_output=True, text=True)
+        self.assertEqual(syntax_res.returncode, 0, f"Syntax error in start-tmux-layout: {syntax_res.stderr}")
+
+        # 2. Test autoexec execution behavior when .ai-docker/autoexec.sh is present
+        test_proj = os.path.join(self.tmp_dir, "autoexec_proj")
+        ai_docker_dir = os.path.join(test_proj, ".ai-docker")
+        os.makedirs(ai_docker_dir, exist_ok=True)
+        autoexec_path = os.path.join(ai_docker_dir, "autoexec.sh")
+        marker_file = os.path.join(test_proj, "autoexec_ran.marker")
+
+        with open(autoexec_path, "w") as f:
+            f.write(f"#!/usr/bin/env bash\necho 'hello-from-autoexec' > '{marker_file}'\n")
+
+        # Mock tmux binary in PATH to inspect command passed to first window
+        mock_bin_dir = os.path.join(self.tmp_dir, "mock_bin")
+        os.makedirs(mock_bin_dir, exist_ok=True)
+        cmd_file = os.path.join(test_proj, "tmux_cmd.txt")
+        mock_tmux_path = os.path.join(mock_bin_dir, "tmux")
+        with open(mock_tmux_path, "w") as f:
+            f.write(f'''#!/usr/bin/env bash
+if [ "$1" = "has-session" ]; then
+  exit 1
+elif [ "$1" = "new-session" ]; then
+  echo "${{@: -1}}" > "{cmd_file}"
+  exit 0
+fi
+exit 0
+''')
+        os.chmod(mock_tmux_path, 0o755)
+
+        test_env = dict(os.environ, PATH=f"{mock_bin_dir}:{os.environ.get('PATH', '')}", AI_COMMAND="echo tool_started")
+        res = subprocess.run(["bash", layout_script], capture_output=True, text=True, cwd=test_proj, env=test_env)
+        self.assertEqual(res.returncode, 0, f"layout script failed: {res.stderr}\n{res.stdout}")
+        self.assertTrue(os.path.exists(cmd_file), "tmux new-session was not invoked")
+        with open(cmd_file, "r") as f:
+            captured_cmd = f.read()
+
+        self.assertIn(".ai-docker/autoexec.sh", captured_cmd)
+        self.assertIn("tool_started", captured_cmd)
+
+        # Now execute the captured command without exec bash -l to test execution
+        test_run_cmd = captured_cmd.replace("exec bash -l", "echo shell_done")
+        exec_res = subprocess.run(["bash", "-c", test_run_cmd], capture_output=True, text=True, cwd=test_proj)
+        self.assertTrue(os.path.exists(marker_file), "autoexec.sh did not execute marker creation")
+        with open(marker_file, "r") as f:
+            self.assertEqual(f.read().strip(), "hello-from-autoexec")
+        self.assertIn("[ai-docker] Running .ai-docker/autoexec.sh...", exec_res.stdout)
+        self.assertIn("tool_started", exec_res.stdout)
+
 if __name__ == "__main__":
     unittest.main()
+
+
+

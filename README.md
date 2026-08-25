@@ -80,6 +80,25 @@ ai-docker
   3) Shell
   4) `htop`
 
+### Workspace Autoexec Script (`.ai-docker/autoexec.sh`)
+If your mounted workspace directory contains `.ai-docker/autoexec.sh`, this script will automatically be executed inside the container immediately before launching the AI tool.
+
+Because containers are ephemeral and start with a clean state, this allows projects to:
+- Automatically install extra system packages or project-specific tools (e.g. using `apt-install` or custom package managers).
+- Install language packages or set up virtual environments.
+- Launch background mock servers, databases, or daemons.
+- Prepare project workspace caches or configurations.
+
+Example `.ai-docker/autoexec.sh`:
+```bash
+#!/usr/bin/env bash
+set -e
+
+echo "==> Setting up project container dependencies..."
+apt-install -y jq ripgrep
+```
+
+
 ### tmux basics in this setup
 - Switch windows:
   - `Ctrl-b` then `n` (next) / `p` (previous)
