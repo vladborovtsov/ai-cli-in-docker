@@ -232,6 +232,45 @@ class TestBashHelpers(unittest.TestCase):
             self.assertIn("ARG:SSH_AUTH_SOCK=/run/host-services/ssh-auth.sock", res_ena.stdout, f"{runner} did not export SSH_AUTH_SOCK when enabled")
             self.assertIn("ARG:/run/host-services/ssh-auth.sock:/run/host-services/ssh-auth.sock", res_ena.stdout, f"{runner} did not volume mount SSH socket when enabled")
 
+    def test_all_runners_mount_gh_config(self):
+        test_dir = os.path.join(self.tmp_dir, "runner_gh_proj")
+        os.makedirs(test_dir)
+
+        runners = [
+            "codex-docker-shell",
+            "antigravity-docker-shell",
+            "claude-docker-shell",
+            "opencode-docker-shell"
+        ]
+
+        expected_mount_suffix = ":/root/.config/gh"
+        for runner in runners:
+            cmd = f'''
+            docker() {{
+              for arg in "$@"; do echo "ARG:$arg"; done
+            }}
+            export -f docker
+            {runner} "{test_dir}"
+            '''
+            res = self.run_bash(cmd)
+            self.assertEqual(res.returncode, 0, f"Failed executing {runner}")
+            matched = any(line.startswith("ARG:") and line.endswith(expected_mount_suffix) for line in res.stdout.splitlines())
+            self.assertTrue(matched, f"{runner} did not mount /root/.config/gh: {res.stdout}")
+
+    def test_sync_ghconfig(self):
+        # Create host gh config
+        host_gh = os.path.join(self.tmp_dir, ".config", "gh")
+        os.makedirs(host_gh, exist_ok=True)
+        with open(os.path.join(host_gh, "hosts.yml"), "w") as f:
+            f.write("github.com:\n  user: testuser\n  oauth_token: gho_test123\n")
+
+        target_gh = os.path.join(self.tmp_dir, ".ai-docker-profiles", "default", "gh-docker-config")
+        res = self.run_bash(f'_ai_docker_sync_ghconfig "{target_gh}"')
+        self.assertEqual(res.returncode, 0)
+        self.assertTrue(os.path.exists(os.path.join(target_gh, "hosts.yml")))
+        with open(os.path.join(target_gh, "hosts.yml"), "r") as f:
+            self.assertIn("oauth_token: gho_test123", f.read())
+
     def test_codex_default_ai_command(self):
         test_dir = os.path.join(self.tmp_dir, "codex_cmd_proj")
         os.makedirs(test_dir)

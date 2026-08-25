@@ -139,6 +139,9 @@ Describe "PowerShell Helper Functions" {
             $activeProfileFile = Join-Path $HOME ".ai-docker-active-profile"
             Test-Path -LiteralPath $activeProfileFile | Should -Be $true
             (Get-Content -LiteralPath $activeProfileFile -Raw).Trim() | Should -Be "test-profile-ps"
+
+            # GH config path should be created
+            Test-Path -LiteralPath $script:GH_CONFIG_PATH | Should -Be $true
         }
     }
 }

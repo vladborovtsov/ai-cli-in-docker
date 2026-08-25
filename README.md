@@ -167,6 +167,9 @@ Specifically, for the active profile:
   - Host: `~/.ai-docker-profiles/<profile>/opencode-docker/local` -> Container: `/root/.local`
   - Host: `~/.ai-docker-profiles/<profile>/opencode-docker/config` -> Container: `/root/.config/opencode`
   - Host: `~/.ai-docker-profiles/<profile>/opencode-docker/docker-env.env` -> Container environment variables
+- **GitHub CLI (`gh`)**:
+  - Host: `~/.ai-docker-profiles/<profile>/gh-docker-config` -> Container: `/root/.config/gh`
+  - Shared across all AI CLI tools (`codex`, `antigravity`, `claude`, `opencode`) so your `gh auth` logins and settings persist seamlessly per profile.
 
 - **Git Configuration Sync**:
   On shell launch, host Git configuration files (`~/.gitconfig` and `~/.config/git/config`) are automatically copied into the active profile's directory mount and symlinked inside the container (`/root/.gitconfig` and `/root/.config/git/config`). This ensures your Git user identity, aliases, and settings are seamlessly available inside containers without single-file volume mount breakage on macOS VirtioFS.

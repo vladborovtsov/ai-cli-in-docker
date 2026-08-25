@@ -21,6 +21,10 @@ RUN gcc -shared -fPIC -o /usr/local/lib/libmockuid.so /tmp/mock_uid.c && \
 COPY scripts/lazygit-install /usr/local/bin/lazygit-install
 RUN chmod +x /usr/local/bin/lazygit-install && lazygit-install
 
+# Install GitHub CLI (gh)
+COPY scripts/gh-install /usr/local/bin/gh-install
+RUN chmod +x /usr/local/bin/gh-install && gh-install
+
 # Install Claude Code using the provided command
 RUN curl -fsSL https://claude.ai/install.sh | bash
 

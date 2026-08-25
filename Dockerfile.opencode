@@ -16,6 +16,10 @@ RUN apt-install --no-install-recommends $(cat /usr/local/share/apt-packages-comm
 COPY scripts/lazygit-install /usr/local/bin/lazygit-install
 RUN chmod +x /usr/local/bin/lazygit-install && lazygit-install
 
+# Install GitHub CLI (gh)
+COPY scripts/gh-install /usr/local/bin/gh-install
+RUN chmod +x /usr/local/bin/gh-install && gh-install
+
 # Install Node.js (LTS) and OpenCode CLI
 RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - && \
     apt-install --no-install-recommends nodejs && \

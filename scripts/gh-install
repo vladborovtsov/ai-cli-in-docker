@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Detect architecture
+arch=$(uname -m)
+case "$arch" in
+  x86_64)  arch_suffix="amd64" ;;
+  aarch64|arm64) arch_suffix="arm64" ;;
+  *)
+    echo "Warning: Unsupported architecture '$arch'. Defaulting to amd64." >&2
+    arch_suffix="amd64"
+    ;;
+esac
+
+# Find latest version tag from GitHub releases (redirect or API fallback)
+LATEST_TAG=""
+if command -v curl >/dev/null 2>&1; then
+  LATEST_TAG=$(curl -fsSLI -o /dev/null -w "%{url_effective}" https://github.com/cli/cli/releases/latest 2>/dev/null | grep -oE '[^/]+$' || true)
+fi
+
+if [ -z "$LATEST_TAG" ] || [ "$LATEST_TAG" = "latest" ]; then
+  LATEST_TAG=$(curl -s "https://api.github.com/repos/cli/cli/releases/latest" 2>/dev/null | grep -o '"tag_name": "[^"]*' | head -n 1 | cut -d'"' -f4 || true)
+fi
+
+if [ -z "$LATEST_TAG" ]; then
+  echo "Error: Failed to determine latest GitHub CLI version." >&2
+  exit 1
+fi
+
+VERSION_NUM="${LATEST_TAG#v}"
+
+echo "Installing GitHub CLI v${VERSION_NUM} for linux_${arch_suffix}..."
+TMP_DIR=$(mktemp -d)
+curl -fsSL "https://github.com/cli/cli/releases/download/${LATEST_TAG}/gh_${VERSION_NUM}_linux_${arch_suffix}.tar.gz" -o "${TMP_DIR}/gh.tar.gz"
+tar -xzf "${TMP_DIR}/gh.tar.gz" -C "${TMP_DIR}"
+install -m 0755 "${TMP_DIR}/gh_${VERSION_NUM}_linux_${arch_suffix}/bin/gh" /usr/local/bin/gh
+rm -rf "${TMP_DIR}"
+
+echo "GitHub CLI v${VERSION_NUM} installation complete."

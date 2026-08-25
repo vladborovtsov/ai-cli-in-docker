@@ -357,6 +357,7 @@ function _ai_docker_load_profile {
   $script:ANTIGRAVITY_CONFIG_PATH = Join-Path $profileDir "antigravity-cli-docker-config"
   $script:CLAUDE_CONFIG_PATH = Join-Path $profileDir "claude-docker-config"
   $script:OPENCODE_DOCKER_DIR = Join-Path $profileDir "opencode-docker"
+  $script:GH_CONFIG_PATH = Join-Path $profileDir "gh-docker-config"
   $script:AI_DOCKER_RECENTS_FILE = Join-Path $profileDir "ai-docker-recents"
 
   # Migrate profile-level config folder if it exists
@@ -377,6 +378,7 @@ function _ai_docker_load_profile {
       _ai_docker_ensure_file -Path (Join-Path $dir "claude.json")
     }
   }
+  _ai_docker_ensure_dir -Path $script:GH_CONFIG_PATH
   _ai_docker_ensure_dir -Path (Join-Path $script:OPENCODE_DOCKER_DIR "local")
   _ai_docker_ensure_dir -Path (Join-Path $script:OPENCODE_DOCKER_DIR "config")
 }
@@ -630,6 +632,24 @@ function _ai_docker_sync_gitconfig {
   }
 }
 
+function _ai_docker_sync_ghconfig {
+  param([string]$TargetDir)
+  if ([string]::IsNullOrWhiteSpace($TargetDir)) { return }
+  _ai_docker_ensure_dir -Path $TargetDir
+  $hostGhDir = Join-Path (Join-Path $HOME ".config") "gh"
+  if (-not (Test-Path -LiteralPath $hostGhDir -PathType Container) -and $env:APPDATA) {
+    $hostGhDir = Join-Path $env:APPDATA "GitHub CLI"
+  }
+  $targetHosts = Join-Path $TargetDir "hosts.yml"
+  $targetConfig = Join-Path $TargetDir "config.yml"
+  if ((Test-Path -LiteralPath $hostGhDir -PathType Container) -and -not (Test-Path -LiteralPath $targetHosts) -and -not (Test-Path -LiteralPath $targetConfig)) {
+    Get-ChildItem -LiteralPath $hostGhDir -Force -ErrorAction SilentlyContinue | ForEach-Object {
+      $destPath = Join-Path $TargetDir $_.Name
+      Copy-Item -LiteralPath $_.FullName -Destination $destPath -Recurse -Force -ErrorAction SilentlyContinue
+    }
+  }
+}
+
 function _ai_docker_gitconfig_link_cmd {
   param(
     [string]$ContainerConfigDir,
@@ -846,6 +866,7 @@ function codex-docker-shell {
 
   _ai_docker_set_title -ToolName 'codex' -WorkspacePath $cwd
   _ai_docker_sync_gitconfig -TargetDir $script:CODEX_CONFIG_PATH
+  _ai_docker_sync_ghconfig -TargetDir $script:GH_CONFIG_PATH
   $workspaceLeaf = _ai_docker_get_unique_workspace_name -Path $cwd
   $envVars = @{
     TERM = $(if ($env:TERM) { $env:TERM } else { 'xterm-256color' })
@@ -858,7 +879,7 @@ function codex-docker-shell {
   $runParams = @{
     ImageName = $script:CODEX_IMAGE_NAME
     EnvFile = (Join-Path $script:CODEX_CONFIG_PATH 'docker-env.env')
-    VolumeMounts = @("${script:CODEX_CONFIG_PATH}:/root/.codex")
+    VolumeMounts = @("${script:CODEX_CONFIG_PATH}:/root/.codex", "${script:GH_CONFIG_PATH}:/root/.config/gh")
     WorkspacePath = $cwd
     EnvironmentVariables = $envVars
     CommandArgs = @('-lc', (_ai_docker_gitconfig_link_cmd -ContainerConfigDir '/root/.codex' -OrigCmd 'start-tmux-layout'))
@@ -920,6 +941,7 @@ function antigravity-docker-shell {
 
   _ai_docker_set_title -ToolName 'antigravity' -WorkspacePath $cwd
   _ai_docker_sync_gitconfig -TargetDir $script:ANTIGRAVITY_CONFIG_PATH
+  _ai_docker_sync_ghconfig -TargetDir $script:GH_CONFIG_PATH
   $workspaceLeaf = _ai_docker_get_unique_workspace_name -Path $cwd
   $envVars = @{
     TERM = $(if ($env:TERM) { $env:TERM } else { 'xterm-256color' })
@@ -932,7 +954,7 @@ function antigravity-docker-shell {
   $runParams = @{
     ImageName = $script:ANTIGRAVITY_IMAGE_NAME
     EnvFile = (Join-Path $script:ANTIGRAVITY_CONFIG_PATH 'docker-env.env')
-    VolumeMounts = @("${script:ANTIGRAVITY_CONFIG_PATH}:/root/.gemini")
+    VolumeMounts = @("${script:ANTIGRAVITY_CONFIG_PATH}:/root/.gemini", "${script:GH_CONFIG_PATH}:/root/.config/gh")
     WorkspacePath = $cwd
     EnvironmentVariables = $envVars
     CommandArgs = @('-lc', (_ai_docker_gitconfig_link_cmd -ContainerConfigDir '/root/.gemini' -OrigCmd 'start-tmux-layout'))
@@ -959,6 +981,7 @@ function claude-docker-shell {
 
   _ai_docker_set_title -ToolName 'claude' -WorkspacePath $cwd
   _ai_docker_sync_gitconfig -TargetDir $script:CLAUDE_CONFIG_PATH
+  _ai_docker_sync_ghconfig -TargetDir $script:GH_CONFIG_PATH
   $workspaceLeaf = _ai_docker_get_unique_workspace_name -Path $cwd
   $envVars = @{
     TERM = $(if ($env:TERM) { $env:TERM } else { 'xterm-256color' })
@@ -971,7 +994,7 @@ function claude-docker-shell {
   $runParams = @{
     ImageName = $script:CLAUDE_IMAGE_NAME
     EnvFile = (Join-Path $script:CLAUDE_CONFIG_PATH 'docker-env.env')
-    VolumeMounts = @("${script:CLAUDE_CONFIG_PATH}:/root/.claude")
+    VolumeMounts = @("${script:CLAUDE_CONFIG_PATH}:/root/.claude", "${script:GH_CONFIG_PATH}:/root/.config/gh")
     WorkspacePath = $cwd
     EnvironmentVariables = $envVars
     CommandArgs = @('-lc', (_ai_docker_gitconfig_link_cmd -ContainerConfigDir '/root/.claude' -OrigCmd 'ln -sf /root/.claude/claude.json /root/.claude.json; start-tmux-layout'))
@@ -998,6 +1021,7 @@ function opencode-docker-shell {
 
   _ai_docker_set_title -ToolName 'opencode' -WorkspacePath $cwd
   _ai_docker_sync_gitconfig -TargetDir (Join-Path $script:OPENCODE_DOCKER_DIR 'config')
+  _ai_docker_sync_ghconfig -TargetDir $script:GH_CONFIG_PATH
   $workspaceLeaf = _ai_docker_get_unique_workspace_name -Path $cwd
   $envVars = @{
     TERM = $(if ($env:TERM) { $env:TERM } else { 'xterm-256color' })
@@ -1013,7 +1037,8 @@ function opencode-docker-shell {
     EnvFile = (Join-Path $script:OPENCODE_DOCKER_DIR 'docker-env.env')
     VolumeMounts = @(
       "${script:OPENCODE_DOCKER_DIR}/local:/root/.local",
-      "${script:OPENCODE_DOCKER_DIR}/config:/root/.config/opencode"
+      "${script:OPENCODE_DOCKER_DIR}/config:/root/.config/opencode",
+      "${script:GH_CONFIG_PATH}:/root/.config/gh"
     )
     WorkspacePath = $cwd
     EnvironmentVariables = $envVars
@@ -1069,7 +1094,7 @@ function ai-docker-deactivate {
     '_ai_docker_get_unique_workspace_name',
     '_ai_docker_confirm_home_mount', '_ai_docker_get_tz', '_ai_docker_should_use_host_network',
     '_ai_docker_set_title', '_ai_docker_run_container', '_ai_docker_build_image',
-    '_ai_docker_sync_gitconfig', '_ai_docker_gitconfig_link_cmd',
+    '_ai_docker_sync_gitconfig', '_ai_docker_sync_ghconfig', '_ai_docker_gitconfig_link_cmd',
     '_ai_docker_resolve_no_cache', '_ai_docker_load_profile',
     '_ai_docker_migrate_legacy', '_ai_docker_migrate_dir', '_ai_docker_get_project_profile', '_ai_docker_set_project_profile', 'ai-docker-profile',
     'codex-docker-build', 'codex-docker-shell', 'codex-auth-docker-run',

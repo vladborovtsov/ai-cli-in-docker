@@ -12,7 +12,7 @@ fi
 echo "=== Verifying Container Setup for: $TOOL_NAME ==="
 
 # Check common terminal utilities
-for cmd in tmux htop lazygit start-tmux-layout; do
+for cmd in tmux htop lazygit gh start-tmux-layout; do
   if command -v "$cmd" >/dev/null 2>&1; then
     echo "✔ Utility '$cmd' is installed and accessible."
   else

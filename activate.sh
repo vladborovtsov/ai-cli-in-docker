@@ -301,6 +301,7 @@ _ai_docker_load_profile() {
   ANTIGRAVITY_CONFIG_PATH="$profile_dir/antigravity-cli-docker-config"
   CLAUDE_CONFIG_PATH="$profile_dir/claude-docker-config"
   OPENCODE_DOCKER_DIR="$profile_dir/opencode-docker"
+  GH_CONFIG_PATH="$profile_dir/gh-docker-config"
   AI_DOCKER_RECENTS_FILE="$profile_dir/ai-docker-recents"
 
   # Migrate profile-level config folder if it exists
@@ -320,6 +321,7 @@ _ai_docker_load_profile() {
       touch "$dir/claude.json"
     fi
   done
+  mkdir -p "$GH_CONFIG_PATH"
   mkdir -p "$OPENCODE_DOCKER_DIR/local" "$OPENCODE_DOCKER_DIR/config"
 }
 
@@ -556,6 +558,17 @@ _ai_docker_sync_gitconfig() {
   fi
 }
 
+_ai_docker_sync_ghconfig() {
+  local target_dir="$1"
+  if [ -z "$target_dir" ]; then
+    return 0
+  fi
+  mkdir -p "$target_dir"
+  if [ -d "$HOME/.config/gh" ] && [ ! -f "$target_dir/hosts.yml" ] && [ ! -f "$target_dir/config.yml" ]; then
+    cp -RL "$HOME/.config/gh/"* "$target_dir/" 2>/dev/null || true
+  fi
+}
+
 _ai_docker_gitconfig_link_cmd() {
   local container_config_dir="$1"
   local orig_cmd="${2:-start-tmux-layout}"
@@ -610,6 +623,7 @@ codex-docker-shell() {
   _ai_docker_load_profile "" "$cwd"
   _ai_docker_update_recents "$cwd"
   _ai_docker_sync_gitconfig "$CODEX_CONFIG_PATH"
+  _ai_docker_sync_ghconfig "$GH_CONFIG_PATH"
 
   if [ "$cwd" = "$HOME" ]; then
     echo "⚠️ Warning: You are running codex-docker-shell from your HOME directory." >&2
@@ -658,6 +672,7 @@ codex-docker-shell() {
   fi
   docker_args+=(
     -v "$CODEX_CONFIG_PATH:/root/.codex"
+    -v "$GH_CONFIG_PATH:/root/.config/gh"
     -v "${cwd}:/workspace/${workspace_name}"
     -w "/workspace/${workspace_name}"
     -e "TZ=${tz_value}"
@@ -781,6 +796,7 @@ antigravity-docker-shell() {
   _ai_docker_load_profile "" "$cwd"
   _ai_docker_update_recents "$cwd"
   _ai_docker_sync_gitconfig "$ANTIGRAVITY_CONFIG_PATH"
+  _ai_docker_sync_ghconfig "$GH_CONFIG_PATH"
 
   if [ "$cwd" = "$HOME" ]; then
     echo "⚠️ Warning: You are running antigravity-docker-shell from your HOME directory." >&2
@@ -829,6 +845,7 @@ antigravity-docker-shell() {
   fi
   docker_args+=(
     -v "$ANTIGRAVITY_CONFIG_PATH:/root/.gemini"
+    -v "$GH_CONFIG_PATH:/root/.config/gh"
     -v "${cwd}:/workspace/${workspace_name}"
     -w "/workspace/${workspace_name}"
     -e "TZ=${tz_value}"
@@ -892,6 +909,7 @@ claude-docker-shell() {
   _ai_docker_load_profile "" "$cwd"
   _ai_docker_update_recents "$cwd"
   _ai_docker_sync_gitconfig "$CLAUDE_CONFIG_PATH"
+  _ai_docker_sync_ghconfig "$GH_CONFIG_PATH"
 
   if [ "$cwd" = "$HOME" ]; then
     echo "⚠️ Warning: You are running claude-docker-shell from your HOME directory." >&2
@@ -940,6 +958,7 @@ claude-docker-shell() {
   fi
   docker_args+=(
     -v "$CLAUDE_CONFIG_PATH:/root/.claude"
+    -v "$GH_CONFIG_PATH:/root/.config/gh"
     -v "${cwd}:/workspace/${workspace_name}"
     -w "/workspace/${workspace_name}"
     -e "TZ=${tz_value}"
@@ -1010,6 +1029,7 @@ opencode-docker-shell() {
   _ai_docker_load_profile "" "$cwd"
   _ai_docker_update_recents "$cwd"
   _ai_docker_sync_gitconfig "$OPENCODE_DOCKER_DIR/config"
+  _ai_docker_sync_ghconfig "$GH_CONFIG_PATH"
 
   if [ "$cwd" = "$HOME" ]; then
     echo "⚠️ Warning: You are running opencode-docker-shell from your HOME directory." >&2
@@ -1059,6 +1079,7 @@ opencode-docker-shell() {
   docker_args+=(
     -v "$OPENCODE_DOCKER_DIR/local:/root/.local"
     -v "$OPENCODE_DOCKER_DIR/config:/root/.config/opencode"
+    -v "$GH_CONFIG_PATH:/root/.config/gh"
     -v "${cwd}:/workspace/${workspace_name}"
     -w "/workspace/${workspace_name}"
     -e "TZ=${tz_value}"
@@ -1089,5 +1110,5 @@ ai-docker() {
 }
 
 ai-docker-deactivate() {
-  unset -f _ai_docker_migrate_legacy _ai_docker_get_project_profile _ai_docker_set_project_profile _ai_docker_get_project_ssh_agent _ai_docker_set_project_ssh_agent _ai_docker_migrate_project_ssh_settings _ai_docker_get_ssh_auth_sock _ai_docker_should_mount_ssh_agent _ai_docker_load_profile ai-docker-profile _ai_docker_update_recents _ai_docker_is_linux_host _ai_docker_should_mount_localtime _ai_docker_detect_tz _ai_docker_should_use_host_network _ai_docker_sync_gitconfig _ai_docker_gitconfig_link_cmd codex-docker-build codex-docker-shell codex-auth-docker-run antigravity-docker-build antigravity-docker-shell claude-docker-build claude-docker-shell opencode-docker-build opencode-docker-shell docker-ai-build-all ai-docker ai-docker-deactivate _ai_docker_get_unique_workspace_name
+  unset -f _ai_docker_migrate_legacy _ai_docker_get_project_profile _ai_docker_set_project_profile _ai_docker_get_project_ssh_agent _ai_docker_set_project_ssh_agent _ai_docker_migrate_project_ssh_settings _ai_docker_get_ssh_auth_sock _ai_docker_should_mount_ssh_agent _ai_docker_load_profile ai-docker-profile _ai_docker_update_recents _ai_docker_is_linux_host _ai_docker_should_mount_localtime _ai_docker_detect_tz _ai_docker_should_use_host_network _ai_docker_sync_gitconfig _ai_docker_sync_ghconfig _ai_docker_gitconfig_link_cmd codex-docker-build codex-docker-shell codex-auth-docker-run antigravity-docker-build antigravity-docker-shell claude-docker-build claude-docker-shell opencode-docker-build opencode-docker-shell docker-ai-build-all ai-docker ai-docker-deactivate _ai_docker_get_unique_workspace_name
 }

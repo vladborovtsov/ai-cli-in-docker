@@ -14,6 +14,10 @@ RUN apt-install $(cat /usr/local/share/apt-packages-common) \
 COPY scripts/lazygit-install /usr/local/bin/lazygit-install
 RUN chmod +x /usr/local/bin/lazygit-install && lazygit-install
 
+# Install GitHub CLI (gh)
+COPY scripts/gh-install /usr/local/bin/gh-install
+RUN chmod +x /usr/local/bin/gh-install && gh-install
+
 # Install the Antigravity CLI tool
 RUN curl -fsSL https://antigravity.google/cli/install.sh | bash
 
