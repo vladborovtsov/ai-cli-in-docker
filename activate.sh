@@ -1087,7 +1087,7 @@ opencode-docker-shell() {
     -e "TMUX_SESSION=${workspace_name}"
     -e "AI_DOCKER_PROFILE=${AI_DOCKER_PROFILE}"
     -e AI_NAME=opencode
-    -e AI_COMMAND=opencode
+    -e AI_COMMAND="${AI_COMMAND:-opencode -c || opencode}"
     -e PATH=/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin
     "$OPENCODE_IMAGE_NAME"
     -lc "$(_ai_docker_gitconfig_link_cmd /root/.config/opencode start-tmux-layout)"

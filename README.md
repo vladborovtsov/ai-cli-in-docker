@@ -75,7 +75,7 @@ ai-docker
 ### What you get when the container starts
 - A tmux session named after your current folder (overridable with `TMUX_SESSION`).
 - Windows:
-  1) AI CLI (active by default): runs `codex` (resumes last session via `codex resume --last`), `agy` (Antigravity), `claude`, or `opencode`, then keeps shell open.
+  1) AI CLI (active by default): runs `codex` (resumes last session via `codex resume --last`), `agy` (Antigravity), `claude` (resumes last session via `claude --continue`), or `opencode` (resumes last session via `opencode -c`), then keeps shell open.
   2) Shell
   3) Shell
   4) `htop`

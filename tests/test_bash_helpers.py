@@ -285,6 +285,20 @@ class TestBashHelpers(unittest.TestCase):
         self.assertEqual(res.returncode, 0)
         self.assertIn("ARG:AI_COMMAND=codex resume --last", res.stdout)
 
+    def test_opencode_default_ai_command(self):
+        test_dir = os.path.join(self.tmp_dir, "opencode_cmd_proj")
+        os.makedirs(test_dir)
+        cmd = f'''
+        docker() {{
+          for arg in "$@"; do echo "ARG:$arg"; done
+        }}
+        export -f docker
+        opencode-docker-shell "{test_dir}"
+        '''
+        res = self.run_bash(cmd)
+        self.assertEqual(res.returncode, 0)
+        self.assertIn("ARG:AI_COMMAND=opencode -c || opencode", res.stdout)
+
     def test_start_tmux_layout_syntax_and_autoexec(self):
         layout_script = os.path.join(self.repo_dir, "scripts", "start-tmux-layout")
         # 1. Syntax check
