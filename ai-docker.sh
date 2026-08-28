@@ -316,7 +316,49 @@ load_main_menu() {
     ssh_state="Enabled"
   fi
 
-  main_items=(
+  main_items=()
+  main_actions=()
+  main_statuses=()
+
+  local last_tool
+  last_tool=$(_ai_docker_get_project_last_tool "$active_mount_path")
+
+  if [ -n "$last_tool" ]; then
+    case "$last_tool" in
+      claude)
+        main_items+=("🚀 Launch Last Used (Claude Code)")
+        main_actions+=("launch_claude")
+        main_statuses+=("[$claude_built]")
+        ;;
+      claude-auto)
+        main_items+=("🚀 Launch Last Used (Claude Code Auto)")
+        main_actions+=("launch_claude_auto")
+        main_statuses+=("[$claude_built]")
+        ;;
+      claude-dangerous)
+        main_items+=("🚀 Launch Last Used (Claude Code Dangerous)")
+        main_actions+=("launch_claude_dangerous")
+        main_statuses+=("[$claude_built]")
+        ;;
+      antigravity)
+        main_items+=("🚀 Launch Last Used (Antigravity CLI)")
+        main_actions+=("launch_antigravity")
+        main_statuses+=("[$antigravity_built]")
+        ;;
+      codex)
+        main_items+=("🚀 Launch Last Used (OpenAI Codex)")
+        main_actions+=("launch_codex")
+        main_statuses+=("[$codex_built]")
+        ;;
+      opencode)
+        main_items+=("🚀 Launch Last Used (OpenCode)")
+        main_actions+=("launch_opencode")
+        main_statuses+=("[$opencode_built]")
+        ;;
+    esac
+  fi
+
+  main_items+=(
     "💬 Launch Claude Code"
     "🤖 Launch Claude Code (Auto Mode)"
     "💀 Launch Claude Code (Dangerous Mode)"
@@ -333,6 +375,43 @@ load_main_menu() {
     "⚙️  Edit Environment Files..."
     "🧹 Clean up Docker Space..."
     "🚪 Exit"
+  )
+
+  main_actions+=(
+    "launch_claude"
+    "launch_claude_auto"
+    "launch_claude_dangerous"
+    "launch_antigravity"
+    "launch_codex"
+    "launch_opencode"
+    "divider"
+    "workspace"
+    "recents"
+    "profile"
+    "ssh_toggle"
+    "divider"
+    "build"
+    "config"
+    "cleanup"
+    "exit"
+  )
+
+  main_statuses+=(
+    "[$claude_built]"
+    "[$claude_built]"
+    "[$claude_built]"
+    "[$antigravity_built]"
+    "[$codex_built]"
+    "[$opencode_built]"
+    ""
+    ""
+    ""
+    ""
+    ""
+    ""
+    ""
+    ""
+    ""
   )
 }
 
@@ -481,30 +560,24 @@ render_menu() {
       echo ""
       lines_printed=$((lines_printed + 2))
 
-      local statuses=(
-        "[$claude_built]"
-        "[$claude_built]"
-        "[$claude_built]"
-        "[$antigravity_built]"
-        "[$codex_built]"
-        "[$opencode_built]"
-        ""
-        ""
-        ""
-        ""
-        ""
-        ""
-        ""
-        ""
-      )
+      local num_launch_items=6
+      local last_tool
+      last_tool=$(_ai_docker_get_project_last_tool "$active_mount_path")
+      if [ -n "$last_tool" ]; then
+        num_launch_items=7
+      fi
 
       for i in "${!main_items[@]}"; do
         local item_text="${main_items[$i]}"
-        if [ "$i" -lt 6 ]; then
+        if [ "$i" -lt "$num_launch_items" ]; then
           if [ "$i" -eq "$selected" ]; then
-            printf "  ${CYAN}▸${RESET} ${BOLD}%-32s${RESET} %s\n" "$item_text" "${statuses[$i]}"
+            printf "  ${CYAN}▸${RESET} ${BOLD}%-42s${RESET} %s\n" "$item_text" "${main_statuses[$i]}"
           else
-            printf "    %-32s %s\n" "$item_text" "${statuses[$i]}"
+            printf "    %-42s %s\n" "$item_text" "${main_statuses[$i]}"
+          fi
+          if [ -n "$last_tool" ] && [ "$i" -eq 0 ]; then
+            echo ""
+            lines_printed=$((lines_printed + 1))
           fi
         else
           if [ "$i" -eq "$selected" ]; then
@@ -851,18 +924,38 @@ handle_back() {
 handle_select() {
   case "$current_menu" in
     main)
-      case "$selected_index" in
-        0) AI_COMMAND="claude --continue || claude" launch_tool "$CLAUDE_IMAGE_NAME" claude-docker-build claude-docker-shell ;;
-        1) AI_COMMAND="claude --permission-mode auto --continue || claude --permission-mode auto" launch_tool "$CLAUDE_IMAGE_NAME" claude-docker-build claude-docker-shell ;;
-        2) AI_COMMAND="claude --dangerously-skip-permissions --continue || claude --dangerously-skip-permissions" launch_tool "$CLAUDE_IMAGE_NAME" claude-docker-build claude-docker-shell ;;
-        3) launch_tool "$ANTIGRAVITY_IMAGE_NAME" antigravity-docker-build antigravity-docker-shell ;;
-        4) launch_tool "$CODEX_IMAGE_NAME" codex-docker-build codex-docker-shell ;;
-        5) launch_tool "$OPENCODE_IMAGE_NAME" opencode-docker-build opencode-docker-shell ;;
-        6) ;; # divider
-        7) current_menu="workspace"; selected_index=0; force_clear=1 ;;
-        8) current_menu="recents"; selected_index=0; force_clear=1 ;;
-        9) current_menu="profile"; selected_index=0; force_clear=1 ;;
-        10)
+      local action="${main_actions[$selected_index]}"
+      case "$action" in
+        launch_claude)
+          AI_COMMAND="claude --continue || claude" launch_tool "$CLAUDE_IMAGE_NAME" claude-docker-build claude-docker-shell
+          ;;
+        launch_claude_auto)
+          AI_COMMAND="claude --permission-mode auto --continue || claude --permission-mode auto" launch_tool "$CLAUDE_IMAGE_NAME" claude-docker-build claude-docker-shell
+          ;;
+        launch_claude_dangerous)
+          AI_COMMAND="claude --dangerously-skip-permissions --continue || claude --dangerously-skip-permissions" launch_tool "$CLAUDE_IMAGE_NAME" claude-docker-build claude-docker-shell
+          ;;
+        launch_antigravity)
+          launch_tool "$ANTIGRAVITY_IMAGE_NAME" antigravity-docker-build antigravity-docker-shell
+          ;;
+        launch_codex)
+          launch_tool "$CODEX_IMAGE_NAME" codex-docker-build codex-docker-shell
+          ;;
+        launch_opencode)
+          launch_tool "$OPENCODE_IMAGE_NAME" opencode-docker-build opencode-docker-shell
+          ;;
+        divider)
+          ;;
+        workspace)
+          current_menu="workspace"; selected_index=0; force_clear=1
+          ;;
+        recents)
+          current_menu="recents"; selected_index=0; force_clear=1
+          ;;
+        profile)
+          current_menu="profile"; selected_index=0; force_clear=1
+          ;;
+        ssh_toggle)
           local cur_ssh
           cur_ssh=$(_ai_docker_get_project_ssh_agent "$active_mount_path")
           if [ "$cur_ssh" = "1" ]; then
@@ -873,11 +966,18 @@ handle_select() {
           load_main_menu
           force_clear=1
           ;;
-        11) ;; # divider
-        12) current_menu="build"; selected_index=0; force_clear=1 ;;
-        13) current_menu="config"; selected_index=0; force_clear=1 ;;
-        14) current_menu="cleanup"; selected_index=0; force_clear=1 ;;
-        15) exit 0 ;;
+        build)
+          current_menu="build"; selected_index=0; force_clear=1
+          ;;
+        config)
+          current_menu="config"; selected_index=0; force_clear=1
+          ;;
+        cleanup)
+          current_menu="cleanup"; selected_index=0; force_clear=1
+          ;;
+        exit)
+          exit 0
+          ;;
       esac
       ;;
     profile)

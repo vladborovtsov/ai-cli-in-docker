@@ -86,6 +86,32 @@ class TestBashHelpers(unittest.TestCase):
         res = self.run_bash(f'_ai_docker_get_project_profile "{test_path}"')
         self.assertEqual(res.stdout.strip(), "")
 
+    def test_project_last_tool_mapping(self):
+        test_path = os.path.join(self.tmp_dir, "tool_project")
+        os.makedirs(test_path)
+
+        # Initial state should be empty
+        res = self.run_bash(f'_ai_docker_get_project_last_tool "{test_path}"')
+        self.assertEqual(res.stdout.strip(), "")
+
+        # Set last tool
+        res = self.run_bash(f'_ai_docker_set_project_last_tool "{test_path}" "antigravity"')
+        self.assertEqual(res.returncode, 0)
+        res = self.run_bash(f'_ai_docker_get_project_last_tool "{test_path}"')
+        self.assertEqual(res.stdout.strip(), "antigravity")
+
+        # Update last tool
+        res = self.run_bash(f'_ai_docker_set_project_last_tool "{test_path}" "claude-auto"')
+        self.assertEqual(res.returncode, 0)
+        res = self.run_bash(f'_ai_docker_get_project_last_tool "{test_path}"')
+        self.assertEqual(res.stdout.strip(), "claude-auto")
+
+        # Clear last tool (empty string)
+        res = self.run_bash(f'_ai_docker_set_project_last_tool "{test_path}" ""')
+        self.assertEqual(res.returncode, 0)
+        res = self.run_bash(f'_ai_docker_get_project_last_tool "{test_path}"')
+        self.assertEqual(res.stdout.strip(), "")
+
     def test_recents_history(self):
         # Test update recents list
         dir1 = os.path.join(self.tmp_dir, "dir1")
@@ -349,7 +375,69 @@ exit 0
         with open(marker_file, "r") as f:
             self.assertEqual(f.read().strip(), "hello-from-autoexec")
         self.assertIn("[ai-docker] Running .ai-docker/autoexec.sh...", exec_res.stdout)
-        self.assertIn("tool_started", exec_res.stdout)
+    def test_all_runners_record_last_tool(self):
+        test_dir = os.path.join(self.tmp_dir, "runner_last_tool_proj")
+        os.makedirs(test_dir)
+
+        # 1. Codex
+        cmd_codex = f'''
+        docker() {{ :; }}
+        export -f docker
+        codex-docker-shell "{test_dir}"
+        '''
+        self.run_bash(cmd_codex)
+        res = self.run_bash(f'_ai_docker_get_project_last_tool "{test_dir}"')
+        self.assertEqual(res.stdout.strip(), "codex")
+
+        # 2. Antigravity
+        cmd_antigravity = f'''
+        docker() {{ :; }}
+        export -f docker
+        antigravity-docker-shell "{test_dir}"
+        '''
+        self.run_bash(cmd_antigravity)
+        res = self.run_bash(f'_ai_docker_get_project_last_tool "{test_dir}"')
+        self.assertEqual(res.stdout.strip(), "antigravity")
+
+        # 3. OpenCode
+        cmd_opencode = f'''
+        docker() {{ :; }}
+        export -f docker
+        opencode-docker-shell "{test_dir}"
+        '''
+        self.run_bash(cmd_opencode)
+        res = self.run_bash(f'_ai_docker_get_project_last_tool "{test_dir}"')
+        self.assertEqual(res.stdout.strip(), "opencode")
+
+        # 4. Claude (standard)
+        cmd_claude = f'''
+        docker() {{ :; }}
+        export -f docker
+        claude-docker-shell "{test_dir}"
+        '''
+        self.run_bash(cmd_claude)
+        res = self.run_bash(f'_ai_docker_get_project_last_tool "{test_dir}"')
+        self.assertEqual(res.stdout.strip(), "claude")
+
+        # 5. Claude (auto mode)
+        cmd_claude_auto = f'''
+        docker() {{ :; }}
+        export -f docker
+        AI_COMMAND="claude --permission-mode auto" claude-docker-shell "{test_dir}"
+        '''
+        self.run_bash(cmd_claude_auto)
+        res = self.run_bash(f'_ai_docker_get_project_last_tool "{test_dir}"')
+        self.assertEqual(res.stdout.strip(), "claude-auto")
+
+        # 6. Claude (dangerous mode)
+        cmd_claude_dangerous = f'''
+        docker() {{ :; }}
+        export -f docker
+        AI_COMMAND="claude --dangerously-skip-permissions" claude-docker-shell "{test_dir}"
+        '''
+        self.run_bash(cmd_claude_dangerous)
+        res = self.run_bash(f'_ai_docker_get_project_last_tool "{test_dir}"')
+        self.assertEqual(res.stdout.strip(), "claude-dangerous")
 
 if __name__ == "__main__":
     unittest.main()

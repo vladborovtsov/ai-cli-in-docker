@@ -313,6 +313,82 @@ function _ai_docker_set_project_profile {
   }
 }
 
+function _ai_docker_get_project_last_tool {
+  param([string]$TargetPath)
+  $mapFile = Join-Path (Join-Path $HOME ".ai-docker-profiles") "project-last-tool"
+  if (Test-Path -LiteralPath $mapFile -PathType Leaf) {
+    $resolvedTarget = _ai_docker_resolve_dir -Path $TargetPath
+    $lines = Get-Content -LiteralPath $mapFile -ErrorAction SilentlyContinue
+    if ($lines) {
+      foreach ($line in $lines) {
+        if ([string]::IsNullOrWhiteSpace($line) -or $line.StartsWith("#")) {
+          continue
+        }
+        $lastColon = $line.LastIndexOf(':')
+        if ($lastColon -gt 0) {
+          $pPath = $line.Substring(0, $lastColon)
+          $pTool = $line.Substring($lastColon + 1)
+          if ($pPath -eq $resolvedTarget) {
+            return $pTool.Trim()
+          }
+        }
+      }
+    }
+  }
+  return $null
+}
+
+function _ai_docker_set_project_last_tool {
+  param([string]$TargetPath, [string]$ToolId)
+  $mapFile = Join-Path (Join-Path $HOME ".ai-docker-profiles") "project-last-tool"
+  _ai_docker_ensure_dir -Path (Split-Path -Parent $mapFile)
+
+  $resolvedTarget = _ai_docker_resolve_dir -Path $TargetPath
+  $tmpFile = "$mapFile.tmp"
+
+  $found = $false
+  $newLines = [System.Collections.Generic.List[string]]::new()
+
+  if (Test-Path -LiteralPath $mapFile -PathType Leaf) {
+    $lines = Get-Content -LiteralPath $mapFile -ErrorAction SilentlyContinue
+    if ($lines) {
+      foreach ($line in $lines) {
+        if ([string]::IsNullOrWhiteSpace($line)) {
+          continue
+        }
+        $lastColon = $line.LastIndexOf(':')
+        if ($lastColon -gt 0) {
+          $pPath = $line.Substring(0, $lastColon)
+          if ($pPath -eq $resolvedTarget) {
+            if (-not [string]::IsNullOrWhiteSpace($ToolId)) {
+              $newLines.Add("${resolvedTarget}:${ToolId}")
+            }
+            $found = $true
+          } else {
+            $newLines.Add($line)
+          }
+        } else {
+          $newLines.Add($line)
+        }
+      }
+    }
+  }
+
+  if (-not $found -and -not [string]::IsNullOrWhiteSpace($ToolId)) {
+    $newLines.Add("${resolvedTarget}:${ToolId}")
+  }
+
+  if ($newLines.Count -gt 0) {
+    $newLines | Set-Content -LiteralPath $tmpFile -ErrorAction Stop
+    Move-Item -LiteralPath $tmpFile -Destination $mapFile -Force -ErrorAction Stop
+  } else {
+    if (Test-Path -LiteralPath $mapFile -PathType Leaf) {
+      Remove-Item -LiteralPath $mapFile -Force -ErrorAction SilentlyContinue
+    }
+    New-Item -ItemType File -Path $mapFile -Force | Out-Null
+  }
+}
+
 function _ai_docker_load_profile {
   param(
     [string]$TargetProfile,
@@ -859,6 +935,7 @@ function codex-docker-shell {
 
   _ai_docker_load_profile -TargetProfile "" -Directory $cwd
   _ai_docker_update_recents -PathToAdd $cwd
+  _ai_docker_set_project_last_tool -TargetPath $cwd -ToolId "codex"
   if (-not (_ai_docker_confirm_home_mount -Path $cwd -CommandName 'codex-docker-shell')) {
     Write-Host "Canceled."
     return 1
@@ -934,6 +1011,7 @@ function antigravity-docker-shell {
 
   _ai_docker_load_profile -TargetProfile "" -Directory $cwd
   _ai_docker_update_recents -PathToAdd $cwd
+  _ai_docker_set_project_last_tool -TargetPath $cwd -ToolId "antigravity"
   if (-not (_ai_docker_confirm_home_mount -Path $cwd -CommandName 'antigravity-docker-shell')) {
     Write-Host "Canceled."
     return 1
@@ -974,6 +1052,13 @@ function claude-docker-shell {
 
   _ai_docker_load_profile -TargetProfile "" -Directory $cwd
   _ai_docker_update_recents -PathToAdd $cwd
+  $claudeTool = "claude"
+  if ($env:AI_COMMAND -and $env:AI_COMMAND.Contains('--permission-mode auto')) {
+    $claudeTool = "claude-auto"
+  } elseif ($env:AI_COMMAND -and $env:AI_COMMAND.Contains('--dangerously-skip-permissions')) {
+    $claudeTool = "claude-dangerous"
+  }
+  _ai_docker_set_project_last_tool -TargetPath $cwd -ToolId $claudeTool
   if (-not (_ai_docker_confirm_home_mount -Path $cwd -CommandName 'claude-docker-shell')) {
     Write-Host "Canceled."
     return 1
@@ -1014,6 +1099,7 @@ function opencode-docker-shell {
 
   _ai_docker_load_profile -TargetProfile "" -Directory $cwd
   _ai_docker_update_recents -PathToAdd $cwd
+  _ai_docker_set_project_last_tool -TargetPath $cwd -ToolId "opencode"
   if (-not (_ai_docker_confirm_home_mount -Path $cwd -CommandName 'opencode-docker-shell')) {
     Write-Host "Canceled."
     return 1
@@ -1096,7 +1182,8 @@ function ai-docker-deactivate {
     '_ai_docker_set_title', '_ai_docker_run_container', '_ai_docker_build_image',
     '_ai_docker_sync_gitconfig', '_ai_docker_sync_ghconfig', '_ai_docker_gitconfig_link_cmd',
     '_ai_docker_resolve_no_cache', '_ai_docker_load_profile',
-    '_ai_docker_migrate_legacy', '_ai_docker_migrate_dir', '_ai_docker_get_project_profile', '_ai_docker_set_project_profile', 'ai-docker-profile',
+    '_ai_docker_migrate_legacy', '_ai_docker_migrate_dir', '_ai_docker_get_project_profile', '_ai_docker_set_project_profile',
+    '_ai_docker_get_project_last_tool', '_ai_docker_set_project_last_tool', 'ai-docker-profile',
     'codex-docker-build', 'codex-docker-shell', 'codex-auth-docker-run',
     'antigravity-docker-build', 'antigravity-docker-shell',
     'claude-docker-build', 'claude-docker-shell',

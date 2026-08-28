@@ -395,6 +395,62 @@ class TestBashTui(unittest.TestCase):
                 os.close(master_fd)
             except OSError:
                 pass
+    def test_main_menu_last_used_tool(self):
+        # Create a mock project directory
+        proj_dir = os.path.realpath(os.path.join(self.tmp_dir, "last_tool_project"))
+        os.makedirs(proj_dir, exist_ok=True)
+
+        # Set up a last used tool: antigravity
+        profiles_dir = os.path.join(self.tmp_dir, ".ai-docker-profiles")
+        os.makedirs(profiles_dir, exist_ok=True)
+        with open(os.path.join(profiles_dir, "project-last-tool"), "w") as f:
+            f.write(f"{proj_dir}:antigravity\n")
+
+        master_fd, slave_fd = pty.openpty()
+        p = subprocess.Popen(
+            [os.path.join(self.repo_dir, "ai-docker.sh")],
+            stdin=slave_fd,
+            stdout=slave_fd,
+            stderr=slave_fd,
+            close_fds=True,
+            text=True,
+            cwd=proj_dir,
+            env=dict(os.environ, TERM="xterm-256color")
+        )
+        os.close(slave_fd)
+
+        try:
+            # Check for header titles and the dynamic first menu item
+            success, clean_output = self.read_until(
+                master_fd,
+                ["AI CLI IN DOCKER - CONTROL TUI", "Launch Last Used (Antigravity CLI)", "Launch Claude Code", "Exit"],
+                timeout=4.0
+            )
+            self.assertTrue(success, f"TUI did not display Last Used item. Output: {repr(clean_output)}")
+
+            # Initial selection should be on the Last Used item (represented by indicator ▸)
+            self.assertTrue(any("▸" in line and "Last Used (Antigravity CLI)" in line for line in clean_output.splitlines()),
+                            f"Last Used item was not selected by default. Output: {clean_output}")
+
+            # Send 'q' to quit
+            os.write(master_fd, b"q")
+
+            start_wait = time.time()
+            while p.poll() is None and (time.time() - start_wait < 2.0):
+                r, _, _ = select.select([master_fd], [], [], 0.05)
+                if master_fd in r:
+                    try:
+                        os.read(master_fd, 1024)
+                    except OSError:
+                        break
+
+            p.wait(timeout=1.0)
+            self.assertEqual(p.returncode, 0)
+        finally:
+            try:
+                os.close(master_fd)
+            except OSError:
+                pass
             p.kill()
 
 if __name__ == "__main__":

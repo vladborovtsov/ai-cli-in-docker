@@ -134,6 +134,64 @@ _ai_docker_set_project_profile() {
   fi
 }
 
+_ai_docker_get_project_last_tool() {
+  local target_path="$1"
+  local map_file="$HOME/.ai-docker-profiles/project-last-tool"
+  if [ -f "$map_file" ]; then
+    local resolved_target
+    resolved_target=$(cd "$target_path" 2>/dev/null && pwd || echo "$target_path")
+    while IFS= read -r line || [ -n "$line" ]; do
+      [[ "$line" =~ ^# ]] && continue
+      [ -z "$line" ] && continue
+      local p_path="${line%:*}"
+      local p_tool="${line##*:}"
+      if [ "$p_path" = "$resolved_target" ]; then
+        echo "$p_tool"
+        return 0
+      fi
+    done < "$map_file"
+  fi
+  return 0
+}
+
+_ai_docker_set_project_last_tool() {
+  local target_path="$1"
+  local tool_id="$2"
+  local map_file="$HOME/.ai-docker-profiles/project-last-tool"
+  mkdir -p "$(dirname "$map_file")"
+
+  local resolved_target
+  resolved_target=$(cd "$target_path" 2>/dev/null && pwd || echo "$target_path")
+
+  local tmp_file="${map_file}.tmp"
+  local found=0
+  if [ -f "$map_file" ]; then
+    while IFS= read -r line || [ -n "$line" ]; do
+      if [ -n "$line" ]; then
+        local p_path="${line%:*}"
+        if [ "$p_path" = "$resolved_target" ]; then
+          if [ -n "$tool_id" ]; then
+            echo "${resolved_target}:${tool_id}" >> "$tmp_file"
+          fi
+          found=1
+        else
+          echo "$line" >> "$tmp_file"
+        fi
+      fi
+    done < "$map_file"
+  fi
+
+  if [ "$found" -eq 0 ] && [ -n "$tool_id" ]; then
+    echo "${resolved_target}:${tool_id}" >> "$tmp_file"
+  fi
+
+  if [ -f "$tmp_file" ]; then
+    mv "$tmp_file" "$map_file"
+  else
+    > "$map_file"
+  fi
+}
+
 _ai_docker_get_project_ssh_agent() {
   local target_path="$1"
   local map_file="$HOME/.ai-docker-profiles/project-ssh-settings"
@@ -622,6 +680,7 @@ codex-docker-shell() {
 
   _ai_docker_load_profile "" "$cwd"
   _ai_docker_update_recents "$cwd"
+  _ai_docker_set_project_last_tool "$cwd" "codex"
   _ai_docker_sync_gitconfig "$CODEX_CONFIG_PATH"
   _ai_docker_sync_ghconfig "$GH_CONFIG_PATH"
 
@@ -795,6 +854,7 @@ antigravity-docker-shell() {
 
   _ai_docker_load_profile "" "$cwd"
   _ai_docker_update_recents "$cwd"
+  _ai_docker_set_project_last_tool "$cwd" "antigravity"
   _ai_docker_sync_gitconfig "$ANTIGRAVITY_CONFIG_PATH"
   _ai_docker_sync_ghconfig "$GH_CONFIG_PATH"
 
@@ -908,6 +968,14 @@ claude-docker-shell() {
 
   _ai_docker_load_profile "" "$cwd"
   _ai_docker_update_recents "$cwd"
+  local claude_tool="claude"
+  local current_ai_cmd="${AI_COMMAND:-}"
+  if [[ "$current_ai_cmd" == *"--permission-mode auto"* ]]; then
+    claude_tool="claude-auto"
+  elif [[ "$current_ai_cmd" == *"--dangerously-skip-permissions"* ]]; then
+    claude_tool="claude-dangerous"
+  fi
+  _ai_docker_set_project_last_tool "$cwd" "$claude_tool"
   _ai_docker_sync_gitconfig "$CLAUDE_CONFIG_PATH"
   _ai_docker_sync_ghconfig "$GH_CONFIG_PATH"
 
@@ -1028,6 +1096,7 @@ opencode-docker-shell() {
 
   _ai_docker_load_profile "" "$cwd"
   _ai_docker_update_recents "$cwd"
+  _ai_docker_set_project_last_tool "$cwd" "opencode"
   _ai_docker_sync_gitconfig "$OPENCODE_DOCKER_DIR/config"
   _ai_docker_sync_ghconfig "$GH_CONFIG_PATH"
 
@@ -1110,5 +1179,5 @@ ai-docker() {
 }
 
 ai-docker-deactivate() {
-  unset -f _ai_docker_migrate_legacy _ai_docker_get_project_profile _ai_docker_set_project_profile _ai_docker_get_project_ssh_agent _ai_docker_set_project_ssh_agent _ai_docker_migrate_project_ssh_settings _ai_docker_get_ssh_auth_sock _ai_docker_should_mount_ssh_agent _ai_docker_load_profile ai-docker-profile _ai_docker_update_recents _ai_docker_is_linux_host _ai_docker_should_mount_localtime _ai_docker_detect_tz _ai_docker_should_use_host_network _ai_docker_sync_gitconfig _ai_docker_sync_ghconfig _ai_docker_gitconfig_link_cmd codex-docker-build codex-docker-shell codex-auth-docker-run antigravity-docker-build antigravity-docker-shell claude-docker-build claude-docker-shell opencode-docker-build opencode-docker-shell docker-ai-build-all ai-docker ai-docker-deactivate _ai_docker_get_unique_workspace_name
+  unset -f _ai_docker_migrate_legacy _ai_docker_get_project_profile _ai_docker_set_project_profile _ai_docker_get_project_last_tool _ai_docker_set_project_last_tool _ai_docker_get_project_ssh_agent _ai_docker_set_project_ssh_agent _ai_docker_migrate_project_ssh_settings _ai_docker_get_ssh_auth_sock _ai_docker_should_mount_ssh_agent _ai_docker_load_profile ai-docker-profile _ai_docker_update_recents _ai_docker_is_linux_host _ai_docker_should_mount_localtime _ai_docker_detect_tz _ai_docker_should_use_host_network _ai_docker_sync_gitconfig _ai_docker_sync_ghconfig _ai_docker_gitconfig_link_cmd codex-docker-build codex-docker-shell codex-auth-docker-run antigravity-docker-build antigravity-docker-shell claude-docker-build claude-docker-shell opencode-docker-build opencode-docker-shell docker-ai-build-all ai-docker ai-docker-deactivate _ai_docker_get_unique_workspace_name
 }

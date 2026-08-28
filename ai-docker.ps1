@@ -71,24 +71,92 @@ function Get-MainItems {
   if (_ai_docker_get_project_ssh_agent -TargetPath $script:AI_DOCKER_ACTIVE_WORKSPACE -eq "1") {
     $sshState = "Enabled"
   }
-  return @(
-    "💬 Launch Claude Code",
-    "🤖 Launch Claude Code (Auto Mode)",
-    "💀 Launch Claude Code (Dangerous Mode)",
-    "💬 Launch Antigravity CLI",
-    "💬 Launch OpenAI Codex",
-    "💬 Launch OpenCode",
-    "──────────────────────────────────────────────────",
-    "📁 Change Workspace Directory...",
-    "🕒 Recent Projects...",
-    "👤 Switch Active Profile (Current: $profile)",
-    "🔑 Project SSH Agent: [ $sshState ]",
-    "──────────────────────────────────────────────────",
-    "🛠️  Rebuild/Update Images...",
-    "⚙️  Edit Environment Files...",
-    "🧹 Clean up Docker Space...",
-    "🚪 Exit"
-  )
+
+  $items = New-Object System.Collections.Generic.List[string]
+  $actions = New-Object System.Collections.Generic.List[string]
+
+  $lastTool = _ai_docker_get_project_last_tool -TargetPath $script:AI_DOCKER_ACTIVE_WORKSPACE
+  if ($lastTool) {
+    switch ($lastTool) {
+      "claude" {
+        [void]$items.Add("🚀 Launch Last Used (Claude Code)")
+        [void]$actions.Add("launch_claude")
+      }
+      "claude-auto" {
+        [void]$items.Add("🚀 Launch Last Used (Claude Code Auto)")
+        [void]$actions.Add("launch_claude_auto")
+      }
+      "claude-dangerous" {
+        [void]$items.Add("🚀 Launch Last Used (Claude Code Dangerous)")
+        [void]$actions.Add("launch_claude_dangerous")
+      }
+      "antigravity" {
+        [void]$items.Add("🚀 Launch Last Used (Antigravity CLI)")
+        [void]$actions.Add("launch_antigravity")
+      }
+      "codex" {
+        [void]$items.Add("🚀 Launch Last Used (OpenAI Codex)")
+        [void]$actions.Add("launch_codex")
+      }
+      "opencode" {
+        [void]$items.Add("🚀 Launch Last Used (OpenCode)")
+        [void]$actions.Add("launch_opencode")
+      }
+    }
+  }
+
+  [void]$items.Add("💬 Launch Claude Code")
+  [void]$actions.Add("launch_claude")
+
+  [void]$items.Add("🤖 Launch Claude Code (Auto Mode)")
+  [void]$actions.Add("launch_claude_auto")
+
+  [void]$items.Add("💀 Launch Claude Code (Dangerous Mode)")
+  [void]$actions.Add("launch_claude_dangerous")
+
+  [void]$items.Add("💬 Launch Antigravity CLI")
+  [void]$actions.Add("launch_antigravity")
+
+  [void]$items.Add("💬 Launch OpenAI Codex")
+  [void]$actions.Add("launch_codex")
+
+  [void]$items.Add("💬 Launch OpenCode")
+  [void]$actions.Add("launch_opencode")
+
+  [void]$items.Add("──────────────────────────────────────────────────")
+  [void]$actions.Add("divider")
+
+  [void]$items.Add("📁 Change Workspace Directory...")
+  [void]$actions.Add("workspace")
+
+  [void]$items.Add("🕒 Recent Projects...")
+  [void]$actions.Add("recents")
+
+  [void]$items.Add("👤 Switch Active Profile (Current: $profile)")
+  [void]$actions.Add("profile")
+
+  [void]$items.Add("🔑 Project SSH Agent: [ $sshState ]")
+  [void]$actions.Add("ssh_toggle")
+
+  [void]$items.Add("──────────────────────────────────────────────────")
+  [void]$actions.Add("divider")
+
+  [void]$items.Add("🛠️  Rebuild/Update Images...")
+  [void]$actions.Add("build")
+
+  [void]$items.Add("⚙️  Edit Environment Files...")
+  [void]$actions.Add("config")
+
+  [void]$items.Add("🧹 Clean up Docker Space...")
+  [void]$actions.Add("cleanup")
+
+  [void]$items.Add("🚪 Exit")
+  [void]$actions.Add("exit")
+
+  return [PSCustomObject]@{
+    Items = $items.ToArray()
+    Actions = $actions.ToArray()
+  }
 }
 
 function Get-ProfileItems {
@@ -391,19 +459,19 @@ function Render-Menu {
       $codexStatus = Get-ImageState -ImageName $script:CODEX_IMAGE_NAME
       $opencodeStatus = Get-ImageState -ImageName $script:OPENCODE_IMAGE_NAME
 
-      $statuses = @(
-        $claudeStatus,
-        $claudeStatus,
-        $claudeStatus,
-        $antigravityStatus,
-        $codexStatus,
-        $opencodeStatus,
-        "", "", "", "", "", "", ""
-      )
+      $mainMenu = Get-MainItems
+      $mainItems = $mainMenu.Items
+      $mainActions = $mainMenu.Actions
 
-      $mainItems = Get-MainItems
+      $numLaunchItems = 6
+      $lastTool = _ai_docker_get_project_last_tool -TargetPath $script:AI_DOCKER_ACTIVE_WORKSPACE
+      if ($lastTool) {
+        $numLaunchItems = 7
+      }
+
       for ($i = 0; $i -lt $mainItems.Length; $i++) {
         $itemText = $mainItems[$i]
+        $action = $mainActions[$i]
         $isSelected = ($i -eq $selected)
 
         if ($itemText.StartsWith("──")) {
@@ -419,12 +487,18 @@ function Render-Menu {
           Write-Host "    " -NoNewline
         }
 
-        if ($i -lt 6) {
-          $status = $statuses[$i]
+        if ($i -lt $numLaunchItems) {
+          $status = ""
+          switch ($action) {
+            { $_ -in @("launch_claude", "launch_claude_auto", "launch_claude_dangerous") } { $status = $claudeStatus }
+            "launch_antigravity" { $status = $antigravityStatus }
+            "launch_codex" { $status = $codexStatus }
+            "launch_opencode" { $status = $opencodeStatus }
+          }
           $statusColor = if ($status -eq "Built") { "Green" } else { "Red" }
 
           if ($isSelected) {
-            $prefixLen = 40 + $status.Length
+            $prefixLen = 44 + $status.Length
             $maxMappingLen = $cols - $prefixLen - 2
             $truncatedBaseDir = if ($baseDir.Length -gt 15) { $baseDir.Substring(0, 12) + "..." } else { $baseDir }
             $constantLen = 26 + $truncatedBaseDir.Length
@@ -443,7 +517,7 @@ function Render-Menu {
               }
             }
 
-            Write-Host ("{0,-32}" -f $itemText) -ForegroundColor White -NoNewline
+            Write-Host ("{0,-42}" -f $itemText) -ForegroundColor White -NoNewline
             Write-Host " [" -NoNewline
             Write-Host $status -ForegroundColor $statusColor -NoNewline
             Write-Host "]" -ForegroundColor Gray -NoNewline
@@ -453,10 +527,13 @@ function Render-Menu {
               Write-Host ""
             }
           } else {
-            Write-Host ("{0,-32}" -f $itemText) -ForegroundColor Gray -NoNewline
+            Write-Host ("{0,-42}" -f $itemText) -ForegroundColor Gray -NoNewline
             Write-Host " [" -NoNewline
             Write-Host $status -ForegroundColor $statusColor -NoNewline
             Write-Host "]" -ForegroundColor Gray
+          }
+          if ($lastTool -and $i -eq 0) {
+            Write-Host ""
           }
         } else {
           if ($isSelected) {
@@ -637,7 +714,7 @@ function Move-Selection {
     $script:selected_index = ($script:selected_index - 1 + $len) % $len
     # Skip dividers
     if ($script:current_menu -eq "main") {
-      $mainItems = Get-MainItems
+      $mainItems = (Get-MainItems).Items
       if ($mainItems[$script:selected_index].StartsWith("──")) {
         $script:selected_index = ($script:selected_index - 1 + $len) % $len
       }
@@ -661,7 +738,7 @@ function Move-Selection {
     $script:selected_index = ($script:selected_index + 1) % $len
     # Skip dividers
     if ($script:current_menu -eq "main") {
-      $mainItems = Get-MainItems
+      $mainItems = (Get-MainItems).Items
       if ($mainItems[$script:selected_index].StartsWith("──")) {
         $script:selected_index = ($script:selected_index + 1) % $len
       }
@@ -686,7 +763,7 @@ function Move-Selection {
 
 function Get-MenuLength {
   switch ($script:current_menu) {
-    "main" { return (Get-MainItems).Length }
+    "main" { return (Get-MainItems).Items.Length }
     "profile" {
       $profileMenu = Get-ProfileItems
       return $profileMenu.Items.Length
@@ -807,30 +884,32 @@ function Run-Cleanup {
 function Handle-Select {
   switch ($script:current_menu) {
     "main" {
-      switch ($script:selected_index) {
-        0 {
+      $mainMenu = Get-MainItems
+      $action = $mainMenu.Actions[$script:selected_index]
+      switch ($action) {
+        "launch_claude" {
             $env:AI_COMMAND = 'claude --continue || claude'
             Launch-Tool -ImageName $script:CLAUDE_IMAGE_NAME -BuildFunc { claude-docker-build } -ShellFunc { param($Path) claude-docker-shell -Path $Path }
             Remove-Item Env:\AI_COMMAND -ErrorAction SilentlyContinue
         }
-        1 {
+        "launch_claude_auto" {
             $env:AI_COMMAND = 'claude --permission-mode auto --continue || claude --permission-mode auto'
             Launch-Tool -ImageName $script:CLAUDE_IMAGE_NAME -BuildFunc { claude-docker-build } -ShellFunc { param($Path) claude-docker-shell -Path $Path }
             Remove-Item Env:\AI_COMMAND -ErrorAction SilentlyContinue
         }
-        2 {
+        "launch_claude_dangerous" {
             $env:AI_COMMAND = 'claude --dangerously-skip-permissions --continue || claude --dangerously-skip-permissions'
             Launch-Tool -ImageName $script:CLAUDE_IMAGE_NAME -BuildFunc { claude-docker-build } -ShellFunc { param($Path) claude-docker-shell -Path $Path }
             Remove-Item Env:\AI_COMMAND -ErrorAction SilentlyContinue
         }
-        3 { Launch-Tool -ImageName $script:ANTIGRAVITY_IMAGE_NAME -BuildFunc { antigravity-docker-build } -ShellFunc { param($Path) antigravity-docker-shell -Path $Path } }
-        4 { Launch-Tool -ImageName $script:CODEX_IMAGE_NAME -BuildFunc { codex-docker-build } -ShellFunc { param($Path) codex-docker-shell -Path $Path } }
-        5 { Launch-Tool -ImageName $script:OPENCODE_IMAGE_NAME -BuildFunc { opencode-docker-build } -ShellFunc { param($Path) opencode-docker-shell -Path $Path } }
-        6 { } # Divider
-        7 { $script:current_menu = "workspace"; $script:selected_index = 0 }
-        8 { $script:current_menu = "recents"; $script:selected_index = 0 }
-        9 { $script:current_menu = "profile"; $script:selected_index = 0 }
-        10 {
+        "launch_antigravity" { Launch-Tool -ImageName $script:ANTIGRAVITY_IMAGE_NAME -BuildFunc { antigravity-docker-build } -ShellFunc { param($Path) antigravity-docker-shell -Path $Path } }
+        "launch_codex" { Launch-Tool -ImageName $script:CODEX_IMAGE_NAME -BuildFunc { codex-docker-build } -ShellFunc { param($Path) codex-docker-shell -Path $Path } }
+        "launch_opencode" { Launch-Tool -ImageName $script:OPENCODE_IMAGE_NAME -BuildFunc { opencode-docker-build } -ShellFunc { param($Path) opencode-docker-shell -Path $Path } }
+        "divider" { }
+        "workspace" { $script:current_menu = "workspace"; $script:selected_index = 0 }
+        "recents" { $script:current_menu = "recents"; $script:selected_index = 0 }
+        "profile" { $script:current_menu = "profile"; $script:selected_index = 0 }
+        "ssh_toggle" {
             $curSsh = _ai_docker_get_project_ssh_agent -TargetPath $script:AI_DOCKER_ACTIVE_WORKSPACE
             if ($curSsh -eq "1") {
               _ai_docker_set_project_ssh_agent -TargetPath $script:AI_DOCKER_ACTIVE_WORKSPACE -Value "0"
@@ -838,11 +917,10 @@ function Handle-Select {
               _ai_docker_set_project_ssh_agent -TargetPath $script:AI_DOCKER_ACTIVE_WORKSPACE -Value "1"
             }
         }
-        11 { } # Divider
-        12 { $script:current_menu = "build"; $script:selected_index = 0 }
-        13 { $script:current_menu = "config"; $script:selected_index = 0 }
-        14 { $script:current_menu = "cleanup"; $script:selected_index = 0 }
-        15 { return $true } # Exit
+        "build" { $script:current_menu = "build"; $script:selected_index = 0 }
+        "config" { $script:current_menu = "config"; $script:selected_index = 0 }
+        "cleanup" { $script:current_menu = "cleanup"; $script:selected_index = 0 }
+        "exit" { return $true }
       }
     }
     "profile" {
@@ -1222,17 +1300,16 @@ while ($true) {
   } elseif ($key -match '^[0-9]$') {
     $shouldBreak = $false
     if ($script:current_menu -eq "main") {
-      switch ($key) {
-        '1' { $script:selected_index = 0; if (Handle-Select) { $shouldBreak = $true } }
-        '2' { $script:selected_index = 1; if (Handle-Select) { $shouldBreak = $true } }
-        '3' { $script:selected_index = 2; if (Handle-Select) { $shouldBreak = $true } }
-        '4' { $script:selected_index = 3; if (Handle-Select) { $shouldBreak = $true } }
-        '5' { $script:selected_index = 4; if (Handle-Select) { $shouldBreak = $true } }
-        '6' { $script:selected_index = 5; if (Handle-Select) { $shouldBreak = $true } }
-        '7' { $script:selected_index = 7; if (Handle-Select) { $shouldBreak = $true } }
-        '8' { $script:selected_index = 8; if (Handle-Select) { $shouldBreak = $true } }
-        '9' { $script:selected_index = 9; if (Handle-Select) { $shouldBreak = $true } }
-        '0' { $script:selected_index = 10; if (Handle-Select) { $shouldBreak = $true } }
+      $mainMenu = Get-MainItems
+      $items = $mainMenu.Items
+      if ($key -eq '0') {
+        $script:selected_index = $items.Length - 1; if (Handle-Select) { $shouldBreak = $true }
+      } else {
+        $digitVal = [int][string]$key
+        $idx = $digitVal - 1
+        if ($idx -ge 0 -and $idx -lt $items.Length - 1 -and -not $items[$idx].StartsWith("──")) {
+          $script:selected_index = $idx; if (Handle-Select) { $shouldBreak = $true }
+        }
       }
     } elseif ($script:current_menu -eq "profile") {
       $profileMenu = Get-ProfileItems

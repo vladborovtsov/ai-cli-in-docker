@@ -94,6 +94,28 @@ Describe "PowerShell Helper Functions" {
             $profile | Should -BeNullOrEmpty
         }
 
+        It "Gets and sets project last tool mapping" {
+            $testProj = Join-Path $HOME "my-test-project-tool"
+            # Initial state should be null
+            $tool = _ai_docker_get_project_last_tool -TargetPath $testProj
+            $tool | Should -BeNullOrEmpty
+
+            # Set a last tool
+            _ai_docker_set_project_last_tool -TargetPath $testProj -ToolId "antigravity"
+            $tool = _ai_docker_get_project_last_tool -TargetPath $testProj
+            $tool | Should -Be "antigravity"
+
+            # Update last tool
+            _ai_docker_set_project_last_tool -TargetPath $testProj -ToolId "claude-dangerous"
+            $tool = _ai_docker_get_project_last_tool -TargetPath $testProj
+            $tool | Should -Be "claude-dangerous"
+
+            # Remove last tool (set to empty)
+            _ai_docker_set_project_last_tool -TargetPath $testProj -ToolId ""
+            $tool = _ai_docker_get_project_last_tool -TargetPath $testProj
+            $tool | Should -BeNullOrEmpty
+        }
+
         It "Manages recents history list" {
             $dir1 = Join-Path $HOME "dir1"
             $dir2 = Join-Path $HOME "dir2"
