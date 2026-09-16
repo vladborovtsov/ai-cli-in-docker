@@ -116,16 +116,36 @@ Describe "PowerShell Helper Functions" {
             $tool | Should -BeNullOrEmpty
         }
 
-        It "Manages recents history list" {
+        It "Manages project last used timestamp" {
+            $testProj = Join-Path $HOME "used_proj"
+            New-Item -ItemType Directory -Path $testProj -Force | Out-Null
+
+            $ts = _ai_docker_get_project_last_used -TargetPath $testProj
+            $ts | Should -Be "0"
+
+            _ai_docker_set_project_last_used -TargetPath $testProj -Timestamp "1700000000"
+            $ts = _ai_docker_get_project_last_used -TargetPath $testProj
+            $ts | Should -Be "1700000000"
+
+            _ai_docker_set_project_last_used -TargetPath $testProj
+            $ts = _ai_docker_get_project_last_used -TargetPath $testProj
+            [int64]$ts | Should -BeGreaterThan 1700000000
+        }
+
+        It "Manages recents history list and re-ordering" {
             $dir1 = Join-Path $HOME "dir1"
             $dir2 = Join-Path $HOME "dir2"
+            $dir3 = Join-Path $HOME "dir3"
             New-Item -ItemType Directory -Path $dir1 -Force | Out-Null
             New-Item -ItemType Directory -Path $dir2 -Force | Out-Null
+            New-Item -ItemType Directory -Path $dir3 -Force | Out-Null
 
             # We need to reload profile to make sure $script:AI_DOCKER_RECENTS_FILE path is set correctly
             _ai_docker_load_profile -TargetProfile "default" -Directory $HOME
 
             # Update recents
+            _ai_docker_set_project_last_used -TargetPath $dir1 -Timestamp "100"
+            _ai_docker_set_project_last_used -TargetPath $dir2 -Timestamp "200"
             _ai_docker_update_recents -PathToAdd $dir1
             _ai_docker_update_recents -PathToAdd $dir2
 
@@ -136,6 +156,20 @@ Describe "PowerShell Helper Functions" {
             # The most recent should be at the top
             $lines[0] | Should -Be $dir2
             $lines[1] | Should -Be $dir1
+
+            # Reusing dir1 moves it back to top
+            _ai_docker_update_recents -PathToAdd $dir1
+            $lines = Get-Content -LiteralPath $script:AI_DOCKER_RECENTS_FILE
+            $lines[0] | Should -Be $dir1
+            $lines[1] | Should -Be $dir2
+
+            # Upgrading legacy recents without timestamp
+            @($dir3, $dir2) | Set-Content -LiteralPath $script:AI_DOCKER_RECENTS_FILE -Encoding UTF8
+            _ai_docker_get_project_last_used -TargetPath $dir3 | Should -Be "0"
+            _ai_docker_update_recents -PathToAdd $dir3
+            $lines = Get-Content -LiteralPath $script:AI_DOCKER_RECENTS_FILE
+            $lines[0] | Should -Be $dir3
+            [int64](_ai_docker_get_project_last_used -TargetPath $dir3) | Should -BeGreaterThan 0
         }
 
         It "Calculates unique workspace name correctly" {

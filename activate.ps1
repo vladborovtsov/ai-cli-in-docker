@@ -389,6 +389,85 @@ function _ai_docker_set_project_last_tool {
   }
 }
 
+function _ai_docker_get_project_last_used {
+  param([string]$TargetPath)
+  $mapFile = Join-Path (Join-Path $HOME ".ai-docker-profiles") "project-last-used"
+  if (Test-Path -LiteralPath $mapFile -PathType Leaf) {
+    $resolvedTarget = _ai_docker_resolve_dir -Path $TargetPath
+    $lines = Get-Content -LiteralPath $mapFile -ErrorAction SilentlyContinue
+    if ($lines) {
+      foreach ($line in $lines) {
+        if ([string]::IsNullOrWhiteSpace($line) -or $line.StartsWith("#")) {
+          continue
+        }
+        $lastColon = $line.LastIndexOf(':')
+        if ($lastColon -gt 0) {
+          $pPath = $line.Substring(0, $lastColon)
+          $pTs = $line.Substring($lastColon + 1)
+          if ($pPath -eq $resolvedTarget) {
+            return $pTs.Trim()
+          }
+        }
+      }
+    }
+  }
+  return "0"
+}
+
+function _ai_docker_set_project_last_used {
+  param([string]$TargetPath, [string]$Timestamp = "")
+  $mapFile = Join-Path (Join-Path $HOME ".ai-docker-profiles") "project-last-used"
+  _ai_docker_ensure_dir -Path (Split-Path -Parent $mapFile)
+
+  $resolvedTarget = _ai_docker_resolve_dir -Path $TargetPath
+  if ([string]::IsNullOrWhiteSpace($Timestamp)) {
+    $Timestamp = [string][DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+  }
+
+  $tmpFile = "$mapFile.tmp"
+  $found = $false
+  $newLines = [System.Collections.Generic.List[string]]::new()
+
+  if (Test-Path -LiteralPath $mapFile -PathType Leaf) {
+    $lines = Get-Content -LiteralPath $mapFile -ErrorAction SilentlyContinue
+    if ($lines) {
+      foreach ($line in $lines) {
+        if ([string]::IsNullOrWhiteSpace($line)) {
+          continue
+        }
+        $lastColon = $line.LastIndexOf(':')
+        if ($lastColon -gt 0) {
+          $pPath = $line.Substring(0, $lastColon)
+          if ($pPath -eq $resolvedTarget) {
+            if (-not [string]::IsNullOrWhiteSpace($Timestamp)) {
+              $newLines.Add("${resolvedTarget}:${Timestamp}")
+            }
+            $found = $true
+          } else {
+            $newLines.Add($line)
+          }
+        } else {
+          $newLines.Add($line)
+        }
+      }
+    }
+  }
+
+  if (-not $found -and -not [string]::IsNullOrWhiteSpace($Timestamp)) {
+    $newLines.Add("${resolvedTarget}:${Timestamp}")
+  }
+
+  if ($newLines.Count -gt 0) {
+    $newLines | Set-Content -LiteralPath $tmpFile -ErrorAction Stop
+    Move-Item -LiteralPath $tmpFile -Destination $mapFile -Force -ErrorAction Stop
+  } else {
+    if (Test-Path -LiteralPath $mapFile -PathType Leaf) {
+      Remove-Item -LiteralPath $mapFile -Force -ErrorAction SilentlyContinue
+    }
+    New-Item -ItemType File -Path $mapFile -Force | Out-Null
+  }
+}
+
 function _ai_docker_load_profile {
   param(
     [string]$TargetProfile,
@@ -510,18 +589,33 @@ function _ai_docker_resolve_dir {
 function _ai_docker_update_recents {
   param([string]$PathToAdd)
 
-  if ([string]::IsNullOrWhiteSpace($PathToAdd)) {
-    return
-  }
-  if (-not (Test-Path -LiteralPath $PathToAdd -PathType Container)) {
-    return
+  $resolvedAdd = ""
+  if (-not [string]::IsNullOrWhiteSpace($PathToAdd) -and (Test-Path -LiteralPath $PathToAdd -PathType Container)) {
+    $resolvedAdd = _ai_docker_resolve_dir -Path $PathToAdd
+    _ai_docker_set_project_last_used -TargetPath $resolvedAdd
   }
 
-  $resolvedAdd = _ai_docker_resolve_dir -Path $PathToAdd
-  $candidates = @($resolvedAdd)
+  $candidates = New-Object 'System.Collections.Generic.List[string]'
+  if (-not [string]::IsNullOrWhiteSpace($resolvedAdd)) {
+    [void]$candidates.Add($resolvedAdd)
+  }
 
   if (Test-Path -LiteralPath $script:AI_DOCKER_RECENTS_FILE -PathType Leaf) {
-    $candidates += Get-Content -LiteralPath $script:AI_DOCKER_RECENTS_FILE -ErrorAction SilentlyContinue
+    $rLines = Get-Content -LiteralPath $script:AI_DOCKER_RECENTS_FILE -ErrorAction SilentlyContinue
+    if ($rLines) {
+      foreach ($line in $rLines) {
+        if ([string]::IsNullOrWhiteSpace($line)) { continue }
+        $cleanPath = $line
+        $lastColon = $line.LastIndexOf(':')
+        if ($lastColon -gt 2 -and -not (Test-Path -LiteralPath $line -PathType Container)) {
+          $possiblePath = $line.Substring(0, $lastColon)
+          if (Test-Path -LiteralPath $possiblePath -PathType Container) {
+            $cleanPath = $possiblePath
+          }
+        }
+        [void]$candidates.Add($cleanPath)
+      }
+    }
   }
 
   $mapFile = Join-Path (Join-Path $HOME ".ai-docker-profiles") "project-profiles"
@@ -534,7 +628,7 @@ function _ai_docker_update_recents {
         if ($lastColon -gt 0) {
           $pPath = $line.Substring(0, $lastColon)
           if (-not [string]::IsNullOrWhiteSpace($pPath) -and (Test-Path -LiteralPath $pPath -PathType Container)) {
-            $candidates += $pPath
+            [void]$candidates.Add($pPath)
           }
         }
       }
@@ -542,7 +636,8 @@ function _ai_docker_update_recents {
   }
 
   $seen = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::OrdinalIgnoreCase)
-  $unique = New-Object 'System.Collections.Generic.List[string]'
+  $unique = New-Object 'System.Collections.Generic.List[PSCustomObject]'
+  $idx = 0
 
   foreach ($candidate in $candidates) {
     if ([string]::IsNullOrWhiteSpace($candidate)) {
@@ -553,19 +648,39 @@ function _ai_docker_update_recents {
     }
 
     $resolved = _ai_docker_resolve_dir -Path $candidate
-    $maxRecents = if ($env:AI_DOCKER_MAX_RECENTS) { [int]$env:AI_DOCKER_MAX_RECENTS } else { 30 }
     if ($seen.Add($resolved)) {
-      [void]$unique.Add($resolved)
-      if ($unique.Count -ge $maxRecents) {
-        break
-      }
+      $tsStr = _ai_docker_get_project_last_used -TargetPath $resolved
+      $ts = 0L
+      [void][Int64]::TryParse($tsStr, [ref]$ts)
+      [void]$unique.Add([PSCustomObject]@{
+        Path = $resolved
+        Timestamp = $ts
+        Order = $idx
+      })
+      $idx++
     }
   }
 
-  if ($unique.Count -gt 0) {
-    $unique | Set-Content -LiteralPath $script:AI_DOCKER_RECENTS_FILE
+  if ($unique.Count -eq 0) {
+    Set-Content -LiteralPath $script:AI_DOCKER_RECENTS_FILE -Value @() -Encoding UTF8
+    return
+  }
+
+  $sorted = $unique | Sort-Object -Property @{ Expression = { $_.Timestamp }; Descending = $true }, @{ Expression = { $_.Order }; Descending = $false }
+  $maxRecents = if ($env:AI_DOCKER_MAX_RECENTS) { [int]$env:AI_DOCKER_MAX_RECENTS } else { 30 }
+
+  $finalPaths = New-Object System.Collections.Generic.List[string]
+  foreach ($item in $sorted) {
+    [void]$finalPaths.Add($item.Path)
+    if ($finalPaths.Count -ge $maxRecents) {
+      break
+    }
+  }
+
+  if ($finalPaths.Count -gt 0) {
+    $finalPaths | Set-Content -LiteralPath $script:AI_DOCKER_RECENTS_FILE -Encoding UTF8
   } else {
-    Set-Content -LiteralPath $script:AI_DOCKER_RECENTS_FILE -Value @()
+    Set-Content -LiteralPath $script:AI_DOCKER_RECENTS_FILE -Value @() -Encoding UTF8
   }
 }
 
@@ -1183,7 +1298,8 @@ function ai-docker-deactivate {
     '_ai_docker_sync_gitconfig', '_ai_docker_sync_ghconfig', '_ai_docker_gitconfig_link_cmd',
     '_ai_docker_resolve_no_cache', '_ai_docker_load_profile',
     '_ai_docker_migrate_legacy', '_ai_docker_migrate_dir', '_ai_docker_get_project_profile', '_ai_docker_set_project_profile',
-    '_ai_docker_get_project_last_tool', '_ai_docker_set_project_last_tool', 'ai-docker-profile',
+    '_ai_docker_get_project_last_tool', '_ai_docker_set_project_last_tool',
+    '_ai_docker_get_project_last_used', '_ai_docker_set_project_last_used', 'ai-docker-profile',
     'codex-docker-build', 'codex-docker-shell', 'codex-auth-docker-run',
     'antigravity-docker-build', 'antigravity-docker-shell',
     'claude-docker-build', 'claude-docker-shell',

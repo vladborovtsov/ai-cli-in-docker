@@ -112,14 +112,37 @@ class TestBashHelpers(unittest.TestCase):
         res = self.run_bash(f'_ai_docker_get_project_last_tool "{test_path}"')
         self.assertEqual(res.stdout.strip(), "")
 
+    def test_project_last_used_timestamp(self):
+        test_path = os.path.join(self.tmp_dir, "used_project")
+        os.makedirs(test_path)
+
+        # Initial state should be 0
+        res = self.run_bash(f'_ai_docker_get_project_last_used "{test_path}"')
+        self.assertEqual(res.stdout.strip(), "0")
+
+        # Set specific timestamp
+        res = self.run_bash(f'_ai_docker_set_project_last_used "{test_path}" 1700000000')
+        self.assertEqual(res.returncode, 0)
+        res = self.run_bash(f'_ai_docker_get_project_last_used "{test_path}"')
+        self.assertEqual(res.stdout.strip(), "1700000000")
+
+        # Update timestamp to now
+        res = self.run_bash(f'_ai_docker_set_project_last_used "{test_path}"')
+        self.assertEqual(res.returncode, 0)
+        res = self.run_bash(f'_ai_docker_get_project_last_used "{test_path}"')
+        self.assertTrue(int(res.stdout.strip()) > 1700000000)
+
     def test_recents_history(self):
         # Test update recents list
         dir1 = os.path.join(self.tmp_dir, "dir1")
         dir2 = os.path.join(self.tmp_dir, "dir2")
+        dir3 = os.path.join(self.tmp_dir, "dir3")
         os.makedirs(dir1)
         os.makedirs(dir2)
+        os.makedirs(dir3)
         
-        res = self.run_bash(f'_ai_docker_update_recents "{dir1}" && _ai_docker_update_recents "{dir2}"')
+        # dir1, then dir2 with explicit timestamps
+        res = self.run_bash(f'_ai_docker_set_project_last_used "{dir1}" 100 && _ai_docker_set_project_last_used "{dir2}" 200 && _ai_docker_update_recents "{dir1}" && _ai_docker_update_recents "{dir2}"')
         self.assertEqual(res.returncode, 0)
         
         # Read recents file
@@ -139,6 +162,22 @@ class TestBashHelpers(unittest.TestCase):
             lines = [line.strip() for line in f.readlines()]
         self.assertEqual(lines[0], dir1)
         self.assertEqual(lines[1], dir2)
+
+        # Upgrading legacy recents: simulate an existing un-timestamped entry
+        with open(recents_file, "w") as f:
+            f.write(f"{dir3}\n{dir2}\n")
+        # dir3 has no timestamp in project-last-used yet (ts=0)
+        res = self.run_bash(f'_ai_docker_get_project_last_used "{dir3}"')
+        self.assertEqual(res.stdout.strip(), "0")
+
+        # Using dir3 upgrades its timestamp and moves it to top
+        res = self.run_bash(f'_ai_docker_update_recents "{dir3}"')
+        self.assertEqual(res.returncode, 0)
+        with open(recents_file, "r") as f:
+            lines = [line.strip() for line in f.readlines()]
+        self.assertEqual(lines[0], dir3)
+        res = self.run_bash(f'_ai_docker_get_project_last_used "{dir3}"')
+        self.assertTrue(int(res.stdout.strip()) > 0)
 
     def test_profile_command(self):
         # List profiles

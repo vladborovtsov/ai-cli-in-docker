@@ -192,6 +192,65 @@ _ai_docker_set_project_last_tool() {
   fi
 }
 
+_ai_docker_get_project_last_used() {
+  local target_path="$1"
+  local map_file="$HOME/.ai-docker-profiles/project-last-used"
+  if [ -f "$map_file" ]; then
+    local resolved_target
+    resolved_target=$(cd "$target_path" 2>/dev/null && pwd || echo "$target_path")
+    while IFS= read -r line || [ -n "$line" ]; do
+      [[ "$line" =~ ^# ]] && continue
+      [ -z "$line" ] && continue
+      local p_path="${line%:*}"
+      local p_ts="${line##*:}"
+      if [ "$p_path" = "$resolved_target" ]; then
+        echo "$p_ts"
+        return 0
+      fi
+    done < "$map_file"
+  fi
+  echo "0"
+  return 0
+}
+
+_ai_docker_set_project_last_used() {
+  local target_path="$1"
+  local timestamp="${2:-$(date +%s)}"
+  local map_file="$HOME/.ai-docker-profiles/project-last-used"
+  mkdir -p "$(dirname "$map_file")"
+
+  local resolved_target
+  resolved_target=$(cd "$target_path" 2>/dev/null && pwd || echo "$target_path")
+
+  local tmp_file="${map_file}.tmp"
+  local found=0
+  if [ -f "$map_file" ]; then
+    while IFS= read -r line || [ -n "$line" ]; do
+      if [ -n "$line" ]; then
+        local p_path="${line%:*}"
+        if [ "$p_path" = "$resolved_target" ]; then
+          if [ -n "$timestamp" ]; then
+            echo "${resolved_target}:${timestamp}" >> "$tmp_file"
+          fi
+          found=1
+        else
+          echo "$line" >> "$tmp_file"
+        fi
+      fi
+    done < "$map_file"
+  fi
+
+  if [ "$found" -eq 0 ] && [ -n "$timestamp" ]; then
+    echo "${resolved_target}:${timestamp}" >> "$tmp_file"
+  fi
+
+  if [ -f "$tmp_file" ]; then
+    mv "$tmp_file" "$map_file"
+  else
+    > "$map_file"
+  fi
+}
+
 _ai_docker_get_project_ssh_agent() {
   local target_path="$1"
   local map_file="$HOME/.ai-docker-profiles/project-ssh-settings"
@@ -446,24 +505,34 @@ fi
 unset _ai_docker_script_path
 
 _ai_docker_update_recents() {
-  local path_to_add="$1"
-  if [ -z "$path_to_add" ] || [ ! -d "$path_to_add" ]; then
-    return
+  local path_to_add="${1-}"
+  local resolved_add=""
+  if [ -n "$path_to_add" ] && [ -d "$path_to_add" ]; then
+    resolved_add=$(cd "$path_to_add" 2>/dev/null && pwd || echo "$path_to_add")
+    _ai_docker_set_project_last_used "$resolved_add" "$(date +%s)"
   fi
 
-  local resolved_add
-  resolved_add=$(cd "$path_to_add" 2>/dev/null && pwd || echo "$path_to_add")
-
   local dirs=()
-  dirs+=("$resolved_add")
+  if [ -n "$resolved_add" ]; then
+    dirs+=("$resolved_add")
+  fi
 
   if [ -f "$AI_DOCKER_RECENTS_FILE" ]; then
     while IFS= read -r line || [ -n "$line" ]; do
-      if [ -n "$line" ] && [ -d "$line" ]; then
-        local resolved
-        resolved=$(cd "$line" 2>/dev/null && pwd || echo "$line")
-        if [ -d "$resolved" ]; then
-          dirs+=("$resolved")
+      if [ -n "$line" ]; then
+        local raw_path="$line"
+        if [ ! -d "$raw_path" ] && [[ "$raw_path" == *:* ]]; then
+          local cand_path="${raw_path%:*}"
+          if [ -d "$cand_path" ]; then
+            raw_path="$cand_path"
+          fi
+        fi
+        if [ -d "$raw_path" ]; then
+          local resolved
+          resolved=$(cd "$raw_path" 2>/dev/null && pwd || echo "$raw_path")
+          if [ -d "$resolved" ]; then
+            dirs+=("$resolved")
+          fi
         fi
       fi
     done < "$AI_DOCKER_RECENTS_FILE"
@@ -487,9 +556,6 @@ _ai_docker_update_recents() {
   local max_recents="${AI_DOCKER_MAX_RECENTS:-30}"
   local unique_dirs=()
   for d in "${dirs[@]}"; do
-    if [ "${#unique_dirs[@]}" -ge "$max_recents" ]; then
-      break
-    fi
     local dup=0
     if [ "${#unique_dirs[@]}" -gt 0 ]; then
       for u in "${unique_dirs[@]}"; do
@@ -504,8 +570,27 @@ _ai_docker_update_recents() {
     fi
   done
 
-  if [ "${#unique_dirs[@]}" -gt 0 ]; then
-    printf "%s\n" "${unique_dirs[@]}" > "$AI_DOCKER_RECENTS_FILE"
+  if [ "${#unique_dirs[@]}" -eq 0 ]; then
+    > "$AI_DOCKER_RECENTS_FILE"
+    return 0
+  fi
+
+  local i=0
+  local sort_input=""
+  for d in "${unique_dirs[@]}"; do
+    local ts
+    ts=$(_ai_docker_get_project_last_used "$d")
+    [[ "$ts" =~ ^[0-9]+$ ]] || ts=0
+    sort_input+=$(printf "%012d\t%05d\t%s\n" "$ts" "$i" "$d")
+    sort_input+=$'\n'
+    i=$((i + 1))
+  done
+
+  local sorted_output
+  sorted_output=$(printf "%s" "$sort_input" | sort -t $'\t' -k1,1nr -k2,2n | head -n "$max_recents" | cut -f3-)
+
+  if [ -n "$sorted_output" ]; then
+    printf "%s\n" "$sorted_output" > "$AI_DOCKER_RECENTS_FILE"
   else
     > "$AI_DOCKER_RECENTS_FILE"
   fi
@@ -1179,5 +1264,5 @@ ai-docker() {
 }
 
 ai-docker-deactivate() {
-  unset -f _ai_docker_migrate_legacy _ai_docker_get_project_profile _ai_docker_set_project_profile _ai_docker_get_project_last_tool _ai_docker_set_project_last_tool _ai_docker_get_project_ssh_agent _ai_docker_set_project_ssh_agent _ai_docker_migrate_project_ssh_settings _ai_docker_get_ssh_auth_sock _ai_docker_should_mount_ssh_agent _ai_docker_load_profile ai-docker-profile _ai_docker_update_recents _ai_docker_is_linux_host _ai_docker_should_mount_localtime _ai_docker_detect_tz _ai_docker_should_use_host_network _ai_docker_sync_gitconfig _ai_docker_sync_ghconfig _ai_docker_gitconfig_link_cmd codex-docker-build codex-docker-shell codex-auth-docker-run antigravity-docker-build antigravity-docker-shell claude-docker-build claude-docker-shell opencode-docker-build opencode-docker-shell docker-ai-build-all ai-docker ai-docker-deactivate _ai_docker_get_unique_workspace_name
+  unset -f _ai_docker_migrate_legacy _ai_docker_get_project_profile _ai_docker_set_project_profile _ai_docker_get_project_last_tool _ai_docker_set_project_last_tool _ai_docker_get_project_last_used _ai_docker_set_project_last_used _ai_docker_get_project_ssh_agent _ai_docker_set_project_ssh_agent _ai_docker_migrate_project_ssh_settings _ai_docker_get_ssh_auth_sock _ai_docker_should_mount_ssh_agent _ai_docker_load_profile ai-docker-profile _ai_docker_update_recents _ai_docker_is_linux_host _ai_docker_should_mount_localtime _ai_docker_detect_tz _ai_docker_should_use_host_network _ai_docker_sync_gitconfig _ai_docker_sync_ghconfig _ai_docker_gitconfig_link_cmd codex-docker-build codex-docker-shell codex-auth-docker-run antigravity-docker-build antigravity-docker-shell claude-docker-build claude-docker-shell opencode-docker-build opencode-docker-shell docker-ai-build-all ai-docker ai-docker-deactivate _ai_docker_get_unique_workspace_name
 }
